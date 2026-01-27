@@ -4231,6 +4231,19 @@ body.theme-glass .bubble-container {
     opacity: 0.25 !important;
     filter: blur(60px) !important;
   }
+
+  /* Fallback for mobile browsers with poor backdrop-filter support */
+  @supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+    body.theme-glass .app-container,
+    body.theme-glass .sidebar,
+    body.theme-glass .bubble.sent,
+    body.theme-glass .bubble.received,
+    body.theme-glass .input-field-container {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      background: rgba(20, 20, 24, 0.92) !important;
+    }
+  }
 }
 
 @media (max-width: 480px) {
@@ -5612,4 +5625,3 @@ body.theme-custom.anim-gradient .gradient-bg {
     -webkit-backdrop-filter: blur(10px) saturate(130%);
   }
 }
-

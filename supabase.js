@@ -102,6 +102,11 @@ class ChatBotsClient {
     const data = await response.json();
 
     if (!response.ok) {
+      if (response.status === 401) {
+        try {
+          await this.signOut();
+        } catch (e) {}
+      }
       throw new Error(data.error || 'API request failed');
     }
 

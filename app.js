@@ -1307,6 +1307,20 @@ async function deleteChat(id) {
     }
   }
 
+  // Update local state immediately so UI doesn't require refresh
+  delete state.chats[id];
+
+  if (state.currentChatId === id) {
+    const remaining = Object.keys(state.chats);
+    if (remaining.length > 0) {
+      state.currentChatId = remaining[0];
+    } else if (!useSupabase) {
+      createChat();
+    } else {
+      state.currentChatId = null;
+    }
+  }
+
   if (chatItem) {
     // Get all items and find index of deleted item
     const allItems = Array.from(chatList.querySelectorAll('.chat-item'));
@@ -1330,17 +1344,6 @@ async function deleteChat(id) {
         item.style.transition = '';
         item.style.transform = '';
       });
-
-      delete state.chats[id];
-
-      if (state.currentChatId === id) {
-        const remaining = Object.keys(state.chats);
-        if (remaining.length > 0) {
-          state.currentChatId = remaining[0];
-        } else if (!useSupabase) {
-          createChat();
-        }
-      }
 
       if (!useSupabase) saveState();
       renderChatList();
