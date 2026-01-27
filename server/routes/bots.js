@@ -2,28 +2,64 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, optionalAuth } = require('../middleware/auth');
 
+function normalizeModerationText(text) {
+  const lowered = (text || '').toLowerCase();
+  const leetspeak = lowered
+    .replace(/0/g, 'o')
+    .replace(/1/g, 'i')
+    .replace(/3/g, 'e')
+    .replace(/4/g, 'a')
+    .replace(/5/g, 's')
+    .replace(/7/g, 't')
+    .replace(/8/g, 'b');
+  const spaced = leetspeak.replace(/[^a-z0-9]+/g, ' ').trim();
+  const compact = spaced.replace(/[^a-z0-9]/g, '');
+  return { spaced, compact };
+}
+
 function moderateBotContent({ name, description, systemPrompt }) {
-  const text = `${name || ''}\n${description || ''}\n${systemPrompt || ''}`.toLowerCase();
+  const rawText = `${name || ''}\n${description || ''}\n${systemPrompt || ''}`;
+  const { spaced, compact } = normalizeModerationText(rawText);
+
   const bannedTerms = [
     'rape',
     'sexual assault',
     'child porn',
-    'cp ',
     'kill yourself',
     'kys',
     'nigger',
     'faggot',
     'hitler',
     'isis',
-    'bestiality'
+    'bestiality',
+    'white power',
+    'kkk',
+    'nazi',
+    'genocide',
+    'ethnic cleansing',
+    'gas the',
+    'lynch'
   ];
 
-  const hit = bannedTerms.find(term => text.includes(term));
+  const normalizedTerms = bannedTerms.map(term => {
+    const termNorm = normalizeModerationText(term);
+    return {
+      raw: term,
+      spaced: termNorm.spaced,
+      compact: termNorm.compact
+    };
+  });
+
+  const hit = normalizedTerms.find(term => {
+    if (!term.spaced) return false;
+    return spaced.includes(term.spaced) || compact.includes(term.compact);
+  });
+
   if (hit) {
     return {
       approved: false,
       rejected: true,
-      rejectionReason: `Blocked by moderation keyword: ${hit}`
+      rejectionReason: 'Prohibited or hateful content detected'
     };
   }
 
@@ -114,7 +150,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
     const { data: bot, error } = await supabase
       .from('bots')
-      .select('id, share_code, roblox_user_id, roblox_username, roblox_avatar_url, name, description, system_prompt, chat_count, created_at, creator_id')
+      .select('id, share_code, roblox_user_id, roblox_username, roblox_avatar_url, name, description, system_prompt, chat_count, created_at, creator_id, is_public, approved, rejected, rejection_reason, moderated_at')
       .eq('id', id)
       .single();
 

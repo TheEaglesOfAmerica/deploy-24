@@ -468,20 +468,25 @@ function renderMyBots(bots) {
     return;
   }
 
-  myBotsList.innerHTML = bots.map(bot => `
-    <div class="my-bot-item" data-bot-id="${bot.id}">
-      <img class="my-bot-avatar" src="${bot.roblox_avatar_url || 'https://via.placeholder.com/48'}" alt="${bot.name}">
-      <div class="my-bot-info">
-        <div class="my-bot-name">${bot.name}</div>
-        <div class="my-bot-code">${bot.share_code}</div>
+  myBotsList.innerHTML = bots.map(bot => {
+    const statusClass = bot.moderation_status || (bot.approved ? 'approved' : (bot.rejected ? 'rejected' : 'pending'));
+    const statusLabel = bot.approved ? 'Approved' : (bot.rejected ? 'Rejected' : 'Pending');
+    const statusMessage = bot.moderation_message || (bot.rejected && bot.rejection_reason ? `Rejected — ${bot.rejection_reason}` : (bot.approved ? 'Approved' : 'Pending — queued'));
+
+    return `
+      <div class="my-bot-item" data-bot-id="${bot.id}">
+        <img class="my-bot-avatar" src="${bot.roblox_avatar_url || 'https://via.placeholder.com/48'}" alt="${bot.name}">
+        <div class="my-bot-info">
+          <div class="my-bot-name">${bot.name}</div>
+          <div class="my-bot-code">${bot.share_code}</div>
+          <div class="my-bot-status-text ${statusClass}">${statusMessage}</div>
+        </div>
+        <div class="my-bot-actions">
+          <span class="profile-bot-status ${statusClass}">${statusLabel}</span>
+        </div>
       </div>
-      <div class="my-bot-actions">
-        <span class="profile-bot-status ${bot.approved ? 'approved' : (bot.rejected ? 'rejected' : 'pending')}">
-          ${bot.approved ? 'Approved' : (bot.rejected ? 'Rejected' : 'Pending')}
-        </span>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
   myBotsList.querySelectorAll('.my-bot-item').forEach(item => {
     item.addEventListener('click', async () => {
@@ -500,7 +505,7 @@ async function loadMarketplace() {
 
   try {
     // Get approved bots from API
-    const response = await window.essx.api('/bots/marketplace');
+    const response = await window.essx.api('/marketplace');
     const bots = Array.isArray(response) ? response : (response.bots || []);
 
     if (bots.length === 0) {
@@ -632,18 +637,23 @@ async function loadProfile() {
           </div>
         `;
       } else {
-        profileBotsList.innerHTML = bots.map(bot => `
-          <div class="profile-bot-item" onclick="openBotFromProfile('${bot.id}')">
-            <img class="profile-bot-avatar" src="${bot.roblox_avatar_url || 'https://via.placeholder.com/40'}" alt="${bot.name}">
-            <div class="profile-bot-info">
-              <div class="profile-bot-name">${bot.name}</div>
-              <div class="profile-bot-code">${bot.share_code}</div>
+        profileBotsList.innerHTML = bots.map(bot => {
+          const statusClass = bot.moderation_status || (bot.approved ? 'approved' : (bot.rejected ? 'rejected' : 'pending'));
+          const statusLabel = bot.approved ? 'Approved' : (bot.rejected ? 'Rejected' : 'Pending');
+          const statusMessage = bot.moderation_message || (bot.rejected && bot.rejection_reason ? `Rejected — ${bot.rejection_reason}` : (bot.approved ? 'Approved' : 'Pending — queued'));
+
+          return `
+            <div class="profile-bot-item" onclick="openBotFromProfile('${bot.id}')">
+              <img class="profile-bot-avatar" src="${bot.roblox_avatar_url || 'https://via.placeholder.com/40'}" alt="${bot.name}">
+              <div class="profile-bot-info">
+                <div class="profile-bot-name">${bot.name}</div>
+                <div class="profile-bot-code">${bot.share_code}</div>
+                <div class="profile-bot-status-text ${statusClass}">${statusMessage}</div>
+              </div>
+              <span class="profile-bot-status ${statusClass}">${statusLabel}</span>
             </div>
-            <span class="profile-bot-status ${bot.approved ? 'approved' : (bot.rejected ? 'rejected' : 'pending')}">
-              ${bot.approved ? 'Approved' : (bot.rejected ? 'Rejected' : 'Pending')}
-            </span>
-          </div>
-        `).join('');
+          `;
+        }).join('');
       }
     }
   } catch (err) {
@@ -692,18 +702,15 @@ function openBotSettings(bot) {
   }
 
   if (botSettingsStatus) {
-    botSettingsStatus.classList.remove('approved', 'pending', 'rejected');
-    let statusText = 'Status: Pending review';
-    if (bot.approved === true) {
-      statusText = 'Status: Approved';
-      botSettingsStatus.classList.add('approved');
-    } else if (bot.rejected === true) {
-      statusText = bot.rejection_reason ? `Rejected: ${bot.rejection_reason}` : 'Status: Rejected';
-      botSettingsStatus.classList.add('rejected');
-    } else {
-      botSettingsStatus.classList.add('pending');
+    const statusClass = bot.moderation_status || (bot.approved ? 'approved' : (bot.rejected ? 'rejected' : 'pending'));
+    let statusText = bot.moderation_message || (bot.approved ? 'Approved' : (bot.rejected ? 'Rejected' : 'Pending review'));
+    if (!bot.moderation_message && bot.rejected && bot.rejection_reason) {
+      statusText = `Rejected — ${bot.rejection_reason}`;
     }
-    botSettingsStatus.textContent = statusText;
+
+    botSettingsStatus.classList.remove('approved', 'pending', 'rejected');
+    botSettingsStatus.classList.add(statusClass);
+    botSettingsStatus.textContent = `Status: ${statusText}`;
   }
 
   openModal(botSettingsModal);

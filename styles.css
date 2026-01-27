@@ -1062,6 +1062,23 @@ body.theme-transitioning .app-container {
   font-family: 'SF Mono', 'Monaco', monospace;
 }
 
+.my-bot-status-text {
+  font-size: 12px;
+  margin-top: 4px;
+  color: var(--text-secondary);
+}
+
+.my-bot-status-text.approved {
+  color: #34C759;
+}
+
+.my-bot-status-text.pending {
+  color: #FF9500;
+}
+
+.my-bot-status-text.rejected {
+  color: #FF3B30;
+}
 .my-bot-actions {
   display: flex;
   gap: 8px;
@@ -6139,6 +6156,23 @@ body.theme-custom.anim-gradient .gradient-bg {
   font-family: 'SF Mono', monospace;
 }
 
+.profile-bot-status-text {
+  font-size: 12px;
+  margin-top: 4px;
+  color: var(--text-secondary);
+}
+
+.profile-bot-status-text.approved {
+  color: #34C759;
+}
+
+.profile-bot-status-text.pending {
+  color: #FF9500;
+}
+
+.profile-bot-status-text.rejected {
+  color: #FF3B30;
+}
 .profile-bot-status {
   padding: 4px 8px;
   border-radius: 6px;
