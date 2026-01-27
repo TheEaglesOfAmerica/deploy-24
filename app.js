@@ -429,8 +429,8 @@ async function loadMarketplace() {
 
   try {
     // Get approved bots from API
-    const response = await window.essx.api('/marketplace');
-    const bots = response.bots || [];
+    const response = await window.essx.api('/bots/marketplace');
+    const bots = Array.isArray(response) ? response : (response.bots || []);
 
     if (bots.length === 0) {
       marketplaceGrid.innerHTML = `
