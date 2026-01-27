@@ -429,6 +429,167 @@ async function completeTotpSignup() {
 }
 
 // ============================================================
+// PASSKEY AUTHENTICATION (WebAuthn)
+// ============================================================
+
+// Helper to convert base64url to ArrayBuffer
+function base64urlToBuffer(base64url) {
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+// Helper to convert ArrayBuffer to base64url
+function bufferToBase64url(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+// Sign in with passkey
+async function signInWithPasskey() {
+  try {
+    // Check if WebAuthn is supported
+    if (!window.PublicKeyCredential) {
+      throw new Error('Passkeys are not supported in this browser');
+    }
+
+    // Get challenge from server
+    const challengeResponse = await window.essx.api('/auth/passkey/challenge', {
+      method: 'POST'
+    });
+
+    const { challenge, rpId } = challengeResponse;
+
+    // Request credential from authenticator
+    const credential = await navigator.credentials.get({
+      publicKey: {
+        challenge: base64urlToBuffer(challenge),
+        rpId: rpId || window.location.hostname,
+        userVerification: 'preferred',
+        timeout: 60000
+      }
+    });
+
+    if (!credential) {
+      throw new Error('No credential selected');
+    }
+
+    // Send credential to server for verification
+    const verifyResponse = await window.essx.api('/auth/passkey/verify', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: credential.id,
+        rawId: bufferToBase64url(credential.rawId),
+        response: {
+          authenticatorData: bufferToBase64url(credential.response.authenticatorData),
+          clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
+          signature: bufferToBase64url(credential.response.signature),
+          userHandle: credential.response.userHandle ? bufferToBase64url(credential.response.userHandle) : null
+        },
+        type: credential.type
+      })
+    });
+
+    if (verifyResponse.success) {
+      // Refresh auth state
+      const { data } = await window.essx.supabase.auth.getSession();
+      if (data.session) {
+        window.essx.session = data.session;
+        window.essx.user = data.session.user;
+      }
+      return true;
+    } else {
+      throw new Error('Passkey verification failed');
+    }
+  } catch (err) {
+    console.error('Passkey sign in error:', err);
+    throw err;
+  }
+}
+
+// Register a new passkey (for existing authenticated users in settings)
+async function registerPasskey() {
+  try {
+    if (!window.PublicKeyCredential) {
+      throw new Error('Passkeys are not supported in this browser');
+    }
+
+    if (!window.essx?.isLoggedIn?.()) {
+      throw new Error('Please sign in first');
+    }
+
+    // Get registration options from server
+    const optionsResponse = await window.essx.api('/auth/passkey/register-options', {
+      method: 'POST'
+    });
+
+    const { challenge, user, rp, pubKeyCredParams, authenticatorSelection, timeout } = optionsResponse;
+
+    // Create credential
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        challenge: base64urlToBuffer(challenge),
+        rp: {
+          name: rp.name || 'Spunnie',
+          id: rp.id || window.location.hostname
+        },
+        user: {
+          id: base64urlToBuffer(user.id),
+          name: user.name,
+          displayName: user.displayName
+        },
+        pubKeyCredParams: pubKeyCredParams || [
+          { alg: -7, type: 'public-key' },  // ES256
+          { alg: -257, type: 'public-key' } // RS256
+        ],
+        authenticatorSelection: authenticatorSelection || {
+          authenticatorAttachment: 'platform',
+          userVerification: 'preferred',
+          residentKey: 'preferred'
+        },
+        timeout: timeout || 60000
+      }
+    });
+
+    if (!credential) {
+      throw new Error('Passkey registration cancelled');
+    }
+
+    // Send credential to server
+    const registerResponse = await window.essx.api('/auth/passkey/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: credential.id,
+        rawId: bufferToBase64url(credential.rawId),
+        response: {
+          attestationObject: bufferToBase64url(credential.response.attestationObject),
+          clientDataJSON: bufferToBase64url(credential.response.clientDataJSON)
+        },
+        type: credential.type
+      })
+    });
+
+    if (registerResponse.success) {
+      showToast('Passkey registered successfully!');
+      return true;
+    } else {
+      throw new Error('Passkey registration failed');
+    }
+  } catch (err) {
+    console.error('Passkey registration error:', err);
+    throw err;
+  }
+}
+
+// ============================================================
 // SIDEBAR TABS & NAVIGATION
 // ============================================================
 
@@ -1128,130 +1289,63 @@ function setupModals() {
     }
   });
 
-  // Device detection - show phone auth only on mobile, Apple auth only on Safari
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  // Auth mode toggle (Sign In / Sign Up)
+  let currentAuthMode = 'signin';
+  const signinModeBtn = document.getElementById('signinModeBtn');
+  const signupModeBtn = document.getElementById('signupModeBtn');
+  const googleBtnText = document.getElementById('googleBtnText');
 
-  const phoneLoginBtn = document.getElementById('phoneLoginBtn');
-  const appleLoginBtn = document.getElementById('appleLoginBtn');
+  function switchAuthMode(mode) {
+    currentAuthMode = mode;
 
-  if (isMobile && phoneLoginBtn) {
-    phoneLoginBtn.style.display = 'flex';
+    // Update toggle buttons
+    if (mode === 'signin') {
+      signinModeBtn?.classList.add('active');
+      signupModeBtn?.classList.remove('active');
+      googleBtnText.textContent = 'Continue with Google';
+    } else {
+      signinModeBtn?.classList.remove('active');
+      signupModeBtn?.classList.add('active');
+      googleBtnText.textContent = 'Sign up with Google';
+    }
   }
 
-  if (isSafari && appleLoginBtn) {
-    appleLoginBtn.style.display = 'flex';
-  }
+  signinModeBtn?.addEventListener('click', () => switchAuthMode('signin'));
+  signupModeBtn?.addEventListener('click', () => switchAuthMode('signup'));
 
-  // Phone auth
-  const phoneAuthModal = document.getElementById('phoneAuthModal');
-  const closePhoneAuth = document.getElementById('closePhoneAuth');
-  const sendSMSBtn = document.getElementById('sendSMSBtn');
-  const verifySMSBtn = document.getElementById('verifySMSBtn');
-  const resendSMSBtn = document.getElementById('resendSMSBtn');
-  const phoneNumber = document.getElementById('phoneNumber');
-  const smsCode = document.getElementById('smsCode');
+  // More options toggle
+  const moreOptionsBtn = document.getElementById('moreOptionsBtn');
+  const additionalAuthOptions = document.getElementById('additionalAuthOptions');
 
-  phoneLoginBtn?.addEventListener('click', () => {
-    openModal(phoneAuthModal);
-  });
+  moreOptionsBtn?.addEventListener('click', () => {
+    const isExpanded = additionalAuthOptions.classList.contains('expanded');
 
-  closePhoneAuth?.addEventListener('click', () => {
-    closeModal(phoneAuthModal);
-  });
-
-  phoneAuthModal?.addEventListener('click', (e) => {
-    if (e.target === phoneAuthModal) closeModal(phoneAuthModal);
-  });
-
-  sendSMSBtn?.addEventListener('click', async () => {
-    const phone = phoneNumber?.value.trim();
-    if (!phone) {
-      alert('Please enter your phone number');
-      return;
+    if (isExpanded) {
+      additionalAuthOptions.classList.remove('expanded');
+      additionalAuthOptions.style.display = 'none';
+      moreOptionsBtn.classList.remove('expanded');
+    } else {
+      additionalAuthOptions.style.display = 'flex';
+      // Trigger reflow for animation
+      setTimeout(() => {
+        additionalAuthOptions.classList.add('expanded');
+        moreOptionsBtn.classList.add('expanded');
+      }, 10);
     }
+  });
 
-    setButtonLoading(sendSMSBtn, true);
+  // Passkey login
+  const passkeyLoginBtn = document.getElementById('passkeyLoginBtn');
+  passkeyLoginBtn?.addEventListener('click', async () => {
+    setButtonLoading(passkeyLoginBtn, true);
     try {
-      const { error } = await window.essx.supabase.auth.signInWithOtp({
-        phone: phone
-      });
-
-      if (error) throw error;
-
-      // Show step 2
-      document.getElementById('phoneStep1').style.display = 'none';
-      document.getElementById('phoneStep2').style.display = 'block';
-      showToast('Code sent to your phone');
-    } catch (err) {
-      console.error('Failed to send SMS:', err);
-      alert('Failed to send code: ' + err.message);
-    } finally {
-      setButtonLoading(sendSMSBtn, false);
-    }
-  });
-
-  verifySMSBtn?.addEventListener('click', async () => {
-    const phone = phoneNumber?.value.trim();
-    const code = smsCode?.value.trim();
-
-    if (!code || code.length !== 6) {
-      alert('Please enter the 6-digit code');
-      return;
-    }
-
-    setButtonLoading(verifySMSBtn, true);
-    try {
-      const { error } = await window.essx.supabase.auth.verifyOtp({
-        phone: phone,
-        token: code,
-        type: 'sms'
-      });
-
-      if (error) throw error;
-
-      closeModal(phoneAuthModal);
+      await signInWithPasskey();
       showToast('Signed in successfully!');
     } catch (err) {
-      console.error('Failed to verify SMS:', err);
-      alert('Invalid code. Please try again.');
+      console.error('Passkey sign in failed:', err);
+      showLoginError('Failed to sign in with passkey. Please try again.');
     } finally {
-      setButtonLoading(verifySMSBtn, false);
-    }
-  });
-
-  resendSMSBtn?.addEventListener('click', async () => {
-    const phone = phoneNumber?.value.trim();
-    setButtonLoading(resendSMSBtn, true);
-    try {
-      const { error } = await window.essx.supabase.auth.signInWithOtp({
-        phone: phone
-      });
-      if (error) throw error;
-      showToast('Code resent!');
-    } catch (err) {
-      console.error('Failed to resend SMS:', err);
-      alert('Failed to resend code');
-    } finally {
-      setButtonLoading(resendSMSBtn, false);
-    }
-  });
-
-  // Apple Sign In
-  appleLoginBtn?.addEventListener('click', async () => {
-    setButtonLoading(appleLoginBtn, true);
-    try {
-      const { error } = await window.essx.supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
-      if (error) throw error;
-    } catch (err) {
-      console.error('Apple sign in failed:', err);
-      showLoginError('Failed to sign in with Apple. Please try again.');
-      setButtonLoading(appleLoginBtn, false);
+      setButtonLoading(passkeyLoginBtn, false);
     }
   });
 
@@ -1311,11 +1405,7 @@ function setupModals() {
     }
   });
 
-  // Allow Enter key to submit codes
-  smsCode?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') verifySMSBtn?.click();
-  });
-
+  // Allow Enter key to submit authenticator code
   authenticatorCode?.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') verifyAuthenticatorBtn?.click();
   });
@@ -1619,6 +1709,37 @@ function setupModals() {
   editProfileModal?.addEventListener('click', (e) => {
     if (e.target === editProfileModal) {
       closeModal(editProfileModal);
+    }
+  });
+
+  // Security Settings: Setup Authenticator
+  const setupAuthenticatorBtn = document.getElementById('setupAuthenticatorBtn');
+  setupAuthenticatorBtn?.addEventListener('click', async () => {
+    try {
+      closeModal(editProfileModal);
+      await startTotpSignup();
+    } catch (err) {
+      console.error('Failed to start TOTP setup:', err);
+      showToast('Failed to setup authenticator');
+    }
+  });
+
+  // Security Settings: Setup Passkey
+  const setupPasskeyBtn = document.getElementById('setupPasskeyBtn');
+  setupPasskeyBtn?.addEventListener('click', async () => {
+    const originalText = setupPasskeyBtn.innerHTML;
+    setupPasskeyBtn.disabled = true;
+    setupPasskeyBtn.innerHTML = '<span style="display: inline-flex; align-items: center; gap: 6px;"><div class="spinner" style="width: 14px; height: 14px; border-width: 2px;"></div> Setting up...</span>';
+
+    try {
+      await registerPasskey();
+      closeModal(editProfileModal);
+    } catch (err) {
+      console.error('Failed to register passkey:', err);
+      showToast('Failed to add passkey: ' + err.message);
+    } finally {
+      setupPasskeyBtn.disabled = false;
+      setupPasskeyBtn.innerHTML = originalText;
     }
   });
 

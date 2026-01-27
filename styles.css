@@ -506,6 +506,140 @@ body.theme-transitioning .app-container {
   color: rgba(255, 255, 255, 0.4);
 }
 
+/* Auth Mode Toggle (Sign In / Sign Up) */
+.auth-mode-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px;
+  border-radius: 12px;
+}
+
+.auth-mode-btn {
+  flex: 1;
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.auth-mode-btn.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.auth-mode-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* More Options Button */
+.more-options-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+  padding: 14px 24px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.more-options-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.more-options-btn svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+}
+
+.more-options-btn.expanded svg {
+  transform: rotate(180deg);
+}
+
+/* Additional Auth Options (expandable) */
+.additional-auth-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.additional-auth-options.expanded {
+  max-height: 500px;
+  opacity: 1;
+  margin-top: 12px;
+}
+
+/* Discord Button */
+.login-btn.discord-btn {
+  background: #5865F2;
+  color: #fff;
+}
+
+.login-btn.discord-btn:hover:not(:disabled) {
+  background: #4752C4;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(88, 101, 242, 0.4);
+}
+
+.login-btn.discord-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(88, 101, 242, 0.3);
+}
+
+/* Passkey Button */
+.login-btn.passkey-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.login-btn.passkey-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 255, 255, 0.1);
+}
+
+.login-btn.passkey-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Authenticator Button */
+.login-btn.authenticator-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.login-btn.authenticator-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 255, 255, 0.1);
+}
+
+.login-btn.authenticator-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
 /* ============================================================
    MODALS (Generic)
    ============================================================ */
@@ -7258,6 +7392,99 @@ body.theme-dark .mod-bot-card:hover {
 .avatar-remove-btn:hover {
   background: #FF3B30;
   color: #fff;
+}
+
+/* Security Settings Section */
+.security-settings-section {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--separator);
+}
+
+.security-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.security-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--imessage-input-bg);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  transition: all 0.2s;
+}
+
+.security-option:hover {
+  background: var(--imessage-gray);
+}
+
+.security-option-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.security-option-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--imessage-blue) 0%, #5856D6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.security-option-icon svg {
+  width: 24px;
+  height: 24px;
+  color: #fff;
+}
+
+.security-option h5 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px 0;
+}
+
+.security-option p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.security-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  background: var(--imessage-blue);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.security-btn:hover {
+  background: #0051d5;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+}
+
+.security-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* Toast Notification */
