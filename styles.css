@@ -1091,6 +1091,54 @@ body.theme-transitioning .app-container {
   color: #FF3B30;
 }
 
+.modal-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 16px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.modal-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.my-bot-item.selected {
+  outline: 2px solid rgba(0, 122, 255, 0.5);
+  background: rgba(0, 122, 255, 0.08);
+}
+
+.bot-settings-modal {
+  max-width: 640px;
+}
+
+.bot-settings-status {
+  font-size: 13px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  display: inline-block;
+  background: var(--imessage-input-bg);
+  color: var(--text-secondary);
+}
+
+.bot-settings-status.approved {
+  background: rgba(52, 199, 89, 0.12);
+  color: #34C759;
+}
+
+.bot-settings-status.pending {
+  background: rgba(255, 204, 0, 0.12);
+  color: #FFCC00;
+}
+
+.bot-settings-status.rejected {
+  background: rgba(255, 59, 48, 0.12);
+  color: #FF3B30;
+}
+
 .my-bots-empty {
   text-align: center;
   padding: 40px 20px;

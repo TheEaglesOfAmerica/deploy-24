@@ -43,6 +43,17 @@ const closeCreateBotModal2 = document.getElementById('closeCreateBotModal2');
 const closeCreateBotModal3 = document.getElementById('closeCreateBotModal3');
 const myBotsModal = document.getElementById('myBotsModal');
 const closeMyBotsModal = document.getElementById('closeMyBotsModal');
+const myBotsList = document.getElementById('myBotsList');
+const botSettingsModal = document.getElementById('botSettingsModal');
+const closeBotSettingsModal = document.getElementById('closeBotSettingsModal');
+const botSettingsTitle = document.getElementById('botSettingsTitle');
+const botSettingsStatus = document.getElementById('botSettingsStatus');
+const botSettingsName = document.getElementById('botSettingsName');
+const botSettingsPublic = document.getElementById('botSettingsPublic');
+const botSettingsDescription = document.getElementById('botSettingsDescription');
+const botSettingsPrompt = document.getElementById('botSettingsPrompt');
+const botSettingsSaveBtn = document.getElementById('botSettingsSaveBtn');
+const botSettingsChatBtn = document.getElementById('botSettingsChatBtn');
 
 console.log('DOM Elements:', {
   chatArea: !!chatArea,
@@ -62,6 +73,7 @@ console.log('DOM Elements:', {
 let isAuthenticated = false;
 let currentUser = null;
 let useSupabase = false; // Flag to switch between localStorage and Supabase
+let botSettingsBot = null;
 
 // Initialize Supabase client
 async function initSupabase() {
@@ -169,7 +181,10 @@ function setupUserMenu() {
   }
 
   if (myBotsBtn) {
-    myBotsBtn.addEventListener('click', () => openModal(myBotsModal));
+    myBotsBtn.addEventListener('click', async () => {
+      await loadMyBots();
+      openModal(myBotsModal);
+    });
   }
 
   if (logoutBtn) {
@@ -422,6 +437,62 @@ function setupSidebarTabs() {
   });
 }
 
+async function loadMyBots() {
+  if (!useSupabase || !myBotsList) return;
+  myBotsList.innerHTML = `
+    <div class="my-bots-empty">
+      <p>Loading bots…</p>
+    </div>
+  `;
+  try {
+    const bots = await window.essx.getMyBots();
+    renderMyBots(bots);
+  } catch (err) {
+    console.error('Failed to load my bots:', err);
+    myBotsList.innerHTML = `
+      <div class="my-bots-empty">
+        <p>Failed to load bots</p>
+      </div>
+    `;
+  }
+}
+
+function renderMyBots(bots) {
+  if (!myBotsList) return;
+  if (!bots || bots.length === 0) {
+    myBotsList.innerHTML = `
+      <div class="my-bots-empty">
+        <p>No bots yet</p>
+      </div>
+    `;
+    return;
+  }
+
+  myBotsList.innerHTML = bots.map(bot => `
+    <div class="my-bot-item" data-bot-id="${bot.id}">
+      <img class="my-bot-avatar" src="${bot.roblox_avatar_url || 'https://via.placeholder.com/48'}" alt="${bot.name}">
+      <div class="my-bot-info">
+        <div class="my-bot-name">${bot.name}</div>
+        <div class="my-bot-code">${bot.share_code}</div>
+      </div>
+      <div class="my-bot-actions">
+        <span class="profile-bot-status ${bot.approved ? 'approved' : (bot.rejected ? 'rejected' : 'pending')}">
+          ${bot.approved ? 'Approved' : (bot.rejected ? 'Rejected' : 'Pending')}
+        </span>
+      </div>
+    </div>
+  `).join('');
+
+  myBotsList.querySelectorAll('.my-bot-item').forEach(item => {
+    item.addEventListener('click', async () => {
+      const botId = item.dataset.botId;
+      await openBotSettingsById(botId);
+      myBotsList.querySelectorAll('.my-bot-item').forEach(el => el.classList.remove('selected'));
+      item.classList.add('selected');
+    });
+  });
+}
+
 async function loadMarketplace() {
   const marketplaceGrid = document.getElementById('marketplaceGrid');
 
@@ -596,8 +667,90 @@ function openBotFromMarketplace(botId) {
 }
 
 function openBotFromProfile(botId) {
-  // Similar to marketplace - switch to existing chat or create new
-  openBotFromMarketplace(botId);
+  openBotSettingsById(botId);
+}
+
+async function openBotSettingsById(botId) {
+  try {
+    const bot = await window.essx.api(`/bots/${botId}`);
+    openBotSettings(bot);
+  } catch (err) {
+    console.error('Failed to open bot settings:', err);
+    alert('Failed to load bot settings');
+  }
+}
+
+function openBotSettings(bot) {
+  botSettingsBot = bot;
+  if (botSettingsTitle) botSettingsTitle.textContent = bot.name || 'Bot Settings';
+  if (botSettingsName) botSettingsName.value = bot.name || '';
+  if (botSettingsDescription) botSettingsDescription.value = bot.description || '';
+  if (botSettingsPrompt) botSettingsPrompt.value = bot.system_prompt || '';
+  if (botSettingsPublic) {
+    botSettingsPublic.checked = !!bot.is_public && bot.approved === true;
+    botSettingsPublic.disabled = bot.approved !== true;
+  }
+
+  if (botSettingsStatus) {
+    botSettingsStatus.classList.remove('approved', 'pending', 'rejected');
+    let statusText = 'Status: Pending review';
+    if (bot.approved === true) {
+      statusText = 'Status: Approved';
+      botSettingsStatus.classList.add('approved');
+    } else if (bot.rejected === true) {
+      statusText = bot.rejection_reason ? `Rejected: ${bot.rejection_reason}` : 'Status: Rejected';
+      botSettingsStatus.classList.add('rejected');
+    } else {
+      botSettingsStatus.classList.add('pending');
+    }
+    botSettingsStatus.textContent = statusText;
+  }
+
+  openModal(botSettingsModal);
+}
+
+async function saveBotSettings() {
+  if (!botSettingsBot) return;
+  const name = botSettingsName?.value.trim();
+  const description = botSettingsDescription?.value.trim() || '';
+  const prompt = botSettingsPrompt?.value.trim() || '';
+  const wantsPublic = !!botSettingsPublic?.checked;
+
+  if (!name) {
+    alert('Name cannot be empty');
+    return;
+  }
+  if (!prompt) {
+    alert('System prompt cannot be empty');
+    return;
+  }
+  if (wantsPublic && botSettingsBot.approved !== true) {
+    alert('This bot must be approved before it can be public.');
+  }
+
+  const updates = {
+    name,
+    description,
+    system_prompt: prompt,
+    is_public: wantsPublic && botSettingsBot.approved === true
+  };
+
+  try {
+    const updated = await window.essx.updateBot(botSettingsBot.id, updates);
+    botSettingsBot = updated;
+    closeModal(botSettingsModal);
+    await Promise.all([loadMyBots(), loadProfile()]);
+  } catch (err) {
+    console.error('Failed to save bot settings:', err);
+    alert(err.message || 'Failed to save changes');
+  }
+}
+
+function openBotChatFromSettings() {
+  if (!botSettingsBot) return;
+  closeModal(botSettingsModal);
+  closeModal(myBotsModal);
+  openBotFromMarketplace(botSettingsBot.id);
 }
 
 // ============================================================
@@ -933,27 +1086,41 @@ function setupModals() {
   profileEditBtn?.addEventListener('click', () => {
     if (!currentUser) return;
 
-    // Populate form with current data
-    const editDisplayName = document.getElementById('editDisplayName');
-    const editAvatarUrl = document.getElementById('editAvatarUrl');
+    (async () => {
+      const editDisplayName = document.getElementById('editDisplayName');
+      const editAvatarUrl = document.getElementById('editAvatarUrl');
 
-    if (editDisplayName) {
-      editDisplayName.value = currentUser.user_metadata?.full_name || '';
-    }
+      try {
+        const profile = await window.essx.getProfile();
+        if (editDisplayName) {
+          editDisplayName.value =
+            profile?.display_name ||
+            currentUser.user_metadata?.full_name ||
+            currentUser.email?.split('@')[0] ||
+            '';
+        }
+        if (editAvatarUrl) {
+          editAvatarUrl.value = profile?.avatar_url || currentUser.user_metadata?.avatar_url || '';
+        }
+      } catch (err) {
+        if (editDisplayName) {
+          editDisplayName.value = currentUser.user_metadata?.full_name || '';
+        }
+        if (editAvatarUrl) {
+          editAvatarUrl.value = currentUser.user_metadata?.avatar_url || '';
+        }
+      }
 
-    if (editAvatarUrl) {
-      editAvatarUrl.value = currentUser.user_metadata?.avatar_url || '';
-    }
-
-    editProfileModal.style.display = 'flex';
+      openModal(editProfileModal);
+    })();
   });
 
   closeEditProfile?.addEventListener('click', () => {
-    editProfileModal.style.display = 'none';
+    closeModal(editProfileModal);
   });
 
   cancelEditProfile?.addEventListener('click', () => {
-    editProfileModal.style.display = 'none';
+    closeModal(editProfileModal);
   });
 
   saveProfile?.addEventListener('click', async () => {
@@ -964,7 +1131,11 @@ function setupModals() {
     const avatarUrl = editAvatarUrl?.value.trim();
 
     try {
-      // Update user metadata via Supabase
+      await window.essx.updateProfile({
+        display_name: displayName || null,
+        avatar_url: avatarUrl || null
+      });
+
       const { data, error } = await window.essx.supabase.auth.updateUser({
         data: {
           full_name: displayName || undefined,
@@ -973,14 +1144,11 @@ function setupModals() {
       });
 
       if (error) throw error;
+      if (data?.user) currentUser = data.user;
 
-      // Update current user object
-      currentUser = data.user;
-
-      // Reload profile view
+      setupUserMenu();
       loadProfile();
-
-      editProfileModal.style.display = 'none';
+      closeModal(editProfileModal);
       alert('Profile updated successfully!');
     } catch (err) {
       console.error('Failed to update profile:', err);
@@ -991,7 +1159,7 @@ function setupModals() {
   // Close modal on backdrop click
   editProfileModal?.addEventListener('click', (e) => {
     if (e.target === editProfileModal) {
-      editProfileModal.style.display = 'none';
+      closeModal(editProfileModal);
     }
   });
 
@@ -1007,10 +1175,22 @@ function setupModals() {
     });
   }
 
+  closeBotSettingsModal?.addEventListener('click', () => {
+    closeModal(botSettingsModal);
+    myBotsList?.querySelectorAll('.my-bot-item').forEach(el => el.classList.remove('selected'));
+  });
+  botSettingsSaveBtn?.addEventListener('click', saveBotSettings);
+  botSettingsChatBtn?.addEventListener('click', openBotChatFromSettings);
+
   // Close modals on backdrop click
-  [totpModal, addBotModal, createBotModal, myBotsModal].forEach(modal => {
+  [totpModal, addBotModal, createBotModal, myBotsModal, botSettingsModal].forEach(modal => {
     modal?.addEventListener('click', (e) => {
-      if (e.target === modal) closeModal(modal);
+      if (e.target === modal) {
+        closeModal(modal);
+        if (modal === botSettingsModal) {
+          myBotsList?.querySelectorAll('.my-bot-item').forEach(el => el.classList.remove('selected'));
+        }
+      }
     });
   });
 }
@@ -1056,7 +1236,8 @@ let wizardData = {
   description: null,
   systemPrompt: null,
   shareCode: null,
-  botId: null
+  botId: null,
+  isPublic: false
 };
 
 function resetWizard() {
@@ -1068,7 +1249,8 @@ function resetWizard() {
     description: null,
     systemPrompt: null,
     shareCode: null,
-    botId: null
+    botId: null,
+    isPublic: false
   };
 
   document.getElementById('robloxInput').value = '';
@@ -1076,6 +1258,8 @@ function resetWizard() {
   document.getElementById('robloxError').style.display = 'none';
   document.getElementById('wizardNext1').disabled = true;
   document.getElementById('botDescription').value = '';
+  const publicToggle = document.getElementById('botIsPublic');
+  if (publicToggle) publicToggle.checked = false;
 
   showWizardStep(1);
 }
@@ -1134,6 +1318,7 @@ async function generateBotPrompt() {
   if (!description) return;
 
   wizardData.description = description;
+  wizardData.isPublic = !!document.getElementById('botIsPublic')?.checked;
 
   const btn = document.getElementById('wizardNext2');
   const btnText = btn.querySelector('.btn-text');
@@ -1160,7 +1345,8 @@ async function generateBotPrompt() {
       roblox_avatar_url: wizardData.robloxAvatarUrl,
       name: wizardData.robloxDisplayName || wizardData.robloxUsername,
       description: description,
-      system_prompt: wizardData.systemPrompt
+      system_prompt: wizardData.systemPrompt,
+      is_public: wizardData.isPublic
     });
 
     wizardData.shareCode = bot.share_code;
@@ -1172,6 +1358,7 @@ async function generateBotPrompt() {
     document.getElementById('botShareCode').textContent = wizardData.shareCode;
     document.getElementById('botShareLink').textContent = `${window.location.origin}/b/${wizardData.shareCode}`;
 
+    await Promise.allSettled([loadMyBots(), loadProfile()]);
     showWizardStep(3);
   } catch (err) {
     console.error('Bot creation failed:', err);

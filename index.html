@@ -317,7 +317,7 @@
   </div>
 
   <!-- Edit Profile Modal -->
-  <div class="modal-backdrop" id="editProfileModal" style="display: none;">
+  <div class="modal-backdrop" id="editProfileModal">
     <div class="modal-dialog">
       <div class="modal-header">
         <h3>Edit Profile</h3>
@@ -627,6 +627,10 @@
           <label>Describe this bot's personality</label>
           <textarea id="botDescription" class="modal-textarea" placeholder="Example: A chill gamer who loves building obstacle courses and friendly trash talking. Uses lots of slang and abbreviations."></textarea>
           <p class="description-hint">Be specific about how the bot should talk, their interests, and personality traits.</p>
+          <label class="modal-checkbox">
+            <input type="checkbox" id="botIsPublic">
+            <span>List in Marketplace (if approved)</span>
+          </label>
 
           <button class="modal-btn primary" id="wizardNext2">
             <span class="btn-text">Generate Prompt</span>
@@ -698,6 +702,33 @@
           </svg>
           Create New Bot
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bot Settings Modal -->
+  <div class="modal-backdrop" id="botSettingsModal">
+    <div class="modal-content bot-settings-modal">
+      <div class="modal-header">
+        <h2 id="botSettingsTitle">Bot Settings</h2>
+        <button class="modal-close" id="closeBotSettingsModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="bot-settings-status" id="botSettingsStatus">Status: Approved</div>
+        <label for="botSettingsName">Name</label>
+        <input type="text" id="botSettingsName" class="modal-input" maxlength="60" placeholder="Bot name">
+        <label class="modal-checkbox">
+          <input type="checkbox" id="botSettingsPublic">
+          <span>Public in Marketplace</span>
+        </label>
+        <label for="botSettingsDescription">Description</label>
+        <textarea id="botSettingsDescription" class="modal-textarea" rows="3" placeholder="Describe your bot"></textarea>
+        <label for="botSettingsPrompt">System Prompt</label>
+        <textarea id="botSettingsPrompt" class="modal-textarea" rows="8" placeholder="System prompt"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn secondary" id="botSettingsChatBtn">Open Chat</button>
+        <button class="modal-btn primary" id="botSettingsSaveBtn">Save Changes</button>
       </div>
     </div>
   </div>

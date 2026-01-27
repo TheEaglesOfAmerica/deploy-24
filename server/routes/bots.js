@@ -2,6 +2,38 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, optionalAuth } = require('../middleware/auth');
 
+function moderateBotContent({ name, description, systemPrompt }) {
+  const text = `${name || ''}\n${description || ''}\n${systemPrompt || ''}`.toLowerCase();
+  const bannedTerms = [
+    'rape',
+    'sexual assault',
+    'child porn',
+    'cp ',
+    'kill yourself',
+    'kys',
+    'nigger',
+    'faggot',
+    'hitler',
+    'isis',
+    'bestiality'
+  ];
+
+  const hit = bannedTerms.find(term => text.includes(term));
+  if (hit) {
+    return {
+      approved: false,
+      rejected: true,
+      rejectionReason: `Blocked by moderation keyword: ${hit}`
+    };
+  }
+
+  return {
+    approved: true,
+    rejected: false,
+    rejectionReason: null
+  };
+}
+
 // Generate a unique 4-character code
 function generateShareCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed I,O,0,1 to avoid confusion
@@ -75,7 +107,38 @@ router.get('/', requireAuth, async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    res.json(bots || []);
+    let botsData = bots || [];
+
+    const pendingBots = botsData.filter(bot => bot.approved === null && bot.rejected === null);
+    if (pendingBots.length > 0) {
+      await Promise.all(pendingBots.map(async (bot) => {
+        const moderation = moderateBotContent({
+          name: bot.name,
+          description: bot.description,
+          systemPrompt: bot.system_prompt
+        });
+        await supabase
+          .from('bots')
+          .update({
+            approved: moderation.approved,
+            rejected: moderation.rejected,
+            rejection_reason: moderation.rejectionReason,
+            is_public: moderation.approved ? !!bot.is_public : false,
+            moderated_at: new Date().toISOString(),
+            moderated_by: req.user.id
+          })
+          .eq('id', bot.id);
+      }));
+
+      const { data: refreshed } = await supabase
+        .from('bots')
+        .select('*')
+        .eq('creator_id', req.user.id)
+        .order('created_at', { ascending: false });
+      botsData = refreshed || botsData;
+    }
+
+    res.json(botsData);
   } catch (err) {
     console.error('Get user bots error:', err);
     res.status(500).json({ error: 'Failed to get bots' });
@@ -91,7 +154,8 @@ router.post('/', requireAuth, async (req, res) => {
       roblox_avatar_url,
       name,
       description,
-      system_prompt
+      system_prompt,
+      is_public
     } = req.body;
 
     if (!roblox_user_id || !name || !system_prompt) {
@@ -123,6 +187,12 @@ router.post('/', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to generate unique code' });
     }
 
+    const moderation = moderateBotContent({
+      name,
+      description,
+      systemPrompt: system_prompt
+    });
+
     // Create the bot
     const { data: bot, error } = await supabase
       .from('bots')
@@ -134,7 +204,13 @@ router.post('/', requireAuth, async (req, res) => {
         roblox_avatar_url,
         name,
         description,
-        system_prompt
+        system_prompt,
+        is_public: moderation.approved ? !!is_public : false,
+        approved: moderation.approved,
+        rejected: moderation.rejected,
+        rejection_reason: moderation.rejectionReason,
+        moderated_at: new Date().toISOString(),
+        moderated_by: req.user.id
       })
       .select()
       .single();
@@ -151,13 +227,13 @@ router.post('/', requireAuth, async (req, res) => {
 router.patch('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, system_prompt } = req.body;
+    const { name, description, system_prompt, is_public } = req.body;
     const supabase = req.app.locals.supabase;
 
     // Check ownership
     const { data: existing } = await supabase
       .from('bots')
-      .select('creator_id')
+      .select('creator_id, approved, rejected')
       .eq('id', id)
       .single();
 
@@ -165,9 +241,21 @@ router.patch('/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
+    if (is_public === true && existing.approved !== true) {
+      return res.status(400).json({ error: 'Bot must be approved before it can be public' });
+    }
+
+    const updatePayload = {
+      updated_at: new Date().toISOString()
+    };
+    if (typeof name === 'string') updatePayload.name = name;
+    if (typeof description === 'string') updatePayload.description = description;
+    if (typeof system_prompt === 'string') updatePayload.system_prompt = system_prompt;
+    if (typeof is_public === 'boolean') updatePayload.is_public = is_public;
+
     const { data: bot, error } = await supabase
       .from('bots')
-      .update({ name, description, system_prompt, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq('id', id)
       .select()
       .single();

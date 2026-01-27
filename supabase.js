@@ -140,6 +140,13 @@ class ChatBotsClient {
     });
   }
 
+  async updateBot(botId, updates) {
+    return this.api(`/bots/${botId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    });
+  }
+
   async deleteBot(botId) {
     return this.api(`/bots/${botId}`, {
       method: 'DELETE'
