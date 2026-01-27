@@ -122,10 +122,21 @@ class ChatBotsClient {
     return this.api('/bots');
   }
 
+  async getMarketplaceBots() {
+    return this.api('/bots/marketplace');
+  }
+
   async createBot(botData) {
     return this.api('/bots', {
       method: 'POST',
       body: JSON.stringify(botData)
+    });
+  }
+
+  async updateBot(botId, updates) {
+    return this.api(`/bots/${botId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
     });
   }
 
@@ -151,10 +162,10 @@ class ChatBotsClient {
     });
   }
 
-  async sendMessage(chatId, text) {
+  async sendMessage(chatId, text, replyTo = null) {
     return this.api(`/chats/${chatId}/message`, {
       method: 'POST',
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text, replyTo })
     });
   }
 

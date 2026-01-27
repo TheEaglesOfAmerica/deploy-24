@@ -7,6 +7,21 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// Simple free-plan rate limiting: 30 messages / minute per user
+const messageRateLimit = new Map();
+function checkRateLimit(userId, limit = 30, windowMs = 60_000) {
+  const now = Date.now();
+  const entry = messageRateLimit.get(userId) || { timestamps: [] };
+  entry.timestamps = entry.timestamps.filter(ts => now - ts < windowMs);
+  if (entry.timestamps.length >= limit) {
+    messageRateLimit.set(userId, entry);
+    return false;
+  }
+  entry.timestamps.push(now);
+  messageRateLimit.set(userId, entry);
+  return true;
+}
+
 // Get all user's chats
 router.get('/', requireAuth, async (req, res) => {
   try {
@@ -25,7 +40,8 @@ router.get('/', requireAuth, async (req, res) => {
           share_code,
           roblox_username,
           roblox_avatar_url,
-          name
+          name,
+          description
         )
       `)
       .eq('user_id', req.user.id)
@@ -55,7 +71,8 @@ router.get('/:id', requireAuth, async (req, res) => {
           roblox_username,
           roblox_avatar_url,
           name,
-          system_prompt
+          system_prompt,
+          description
         )
       `)
       .eq('id', id)
@@ -135,13 +152,17 @@ router.post('/', requireAuth, async (req, res) => {
 router.post('/:id/message', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { text } = req.body;
+    const { text, replyTo } = req.body;
 
     if (!text) {
       return res.status(400).json({ error: 'Message text is required' });
     }
 
     const supabase = req.app.locals.supabase;
+
+    if (!checkRateLimit(req.user.id)) {
+      return res.status(429).json({ error: 'Rate limit exceeded. Try again in a minute.' });
+    }
 
     // Get the chat with bot info
     const { data: chat, error: chatError } = await supabase
@@ -150,7 +171,9 @@ router.post('/:id/message', requireAuth, async (req, res) => {
         *,
         bots (
           system_prompt,
-          name
+          name,
+          description,
+          roblox_username
         )
       `)
       .eq('id', id)
@@ -165,7 +188,8 @@ router.post('/:id/message', requireAuth, async (req, res) => {
     const userMessage = {
       type: 'sent',
       text,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      replyTo: replyTo || null
     };
 
     const messages = [...(chat.messages || []), userMessage];

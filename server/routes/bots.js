@@ -35,6 +35,26 @@ router.get('/code/:code', optionalAuth, async (req, res) => {
   }
 });
 
+// Marketplace: list public bots
+router.get('/marketplace', optionalAuth, async (req, res) => {
+  try {
+    const supabase = req.app.locals.supabase;
+
+    const { data: bots, error } = await supabase
+      .from('bots')
+      .select('id, share_code, roblox_user_id, roblox_username, roblox_avatar_url, name, description, chat_count, created_at, is_public')
+      .eq('is_public', true)
+      .order('chat_count', { ascending: false })
+      .limit(60);
+
+    if (error) throw error;
+    res.json(bots || []);
+  } catch (err) {
+    console.error('Marketplace bots error:', err);
+    res.status(500).json({ error: 'Failed to load marketplace bots' });
+  }
+});
+
 // Get bot by ID
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
@@ -91,7 +111,8 @@ router.post('/', requireAuth, async (req, res) => {
       roblox_avatar_url,
       name,
       description,
-      system_prompt
+      system_prompt,
+      is_public
     } = req.body;
 
     if (!roblox_user_id || !name || !system_prompt) {
@@ -134,7 +155,8 @@ router.post('/', requireAuth, async (req, res) => {
         roblox_avatar_url,
         name,
         description,
-        system_prompt
+        system_prompt,
+        is_public: !!is_public
       })
       .select()
       .single();
@@ -151,7 +173,7 @@ router.post('/', requireAuth, async (req, res) => {
 router.patch('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, system_prompt } = req.body;
+    const { name, description, system_prompt, is_public } = req.body;
     const supabase = req.app.locals.supabase;
 
     // Check ownership
@@ -165,9 +187,17 @@ router.patch('/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
+    const updatePayload = {
+      updated_at: new Date().toISOString()
+    };
+    if (typeof name === 'string') updatePayload.name = name;
+    if (typeof description === 'string') updatePayload.description = description;
+    if (typeof system_prompt === 'string') updatePayload.system_prompt = system_prompt;
+    if (typeof is_public === 'boolean') updatePayload.is_public = is_public;
+
     const { data: bot, error } = await supabase
       .from('bots')
-      .update({ name, description, system_prompt, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq('id', id)
       .select()
       .single();

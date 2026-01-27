@@ -422,6 +422,20 @@ body.theme-transitioning .app-container {
   color: rgba(255, 255, 255, 0.4);
 }
 
+.modal-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 16px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.modal-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
 /* ============================================================
    MODALS (Generic)
    ============================================================ */
@@ -1179,6 +1193,27 @@ body.theme-transitioning .app-container {
 .new-chat-btn:active {
   transform: scale(0.92);
   box-shadow: 0 1px 4px rgba(0, 122, 255, 0.3);
+}
+
+.marketplace-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, background 0.2s ease;
+  margin-right: 8px;
+}
+
+.marketplace-btn:hover {
+  transform: translateY(-1px);
+  background: var(--surface-hover);
 }
 
 .chat-list {
@@ -5624,4 +5659,118 @@ body.theme-custom.anim-gradient .gradient-bg {
     backdrop-filter: blur(10px) saturate(130%);
     -webkit-backdrop-filter: blur(10px) saturate(130%);
   }
+}
+
+/* Marketplace */
+.marketplace-modal {
+  max-width: 640px;
+}
+
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.marketplace-subtitle {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.marketplace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.marketplace-item {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+}
+
+.marketplace-item-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface-hover);
+}
+
+.marketplace-item-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.marketplace-item-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.marketplace-item-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.marketplace-item-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.marketplace-item-action .modal-btn {
+  white-space: nowrap;
+}
+
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  margin-bottom: 12px;
+}
+
+.profile-card-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.profile-card-name {
+  font-weight: 600;
+}
+
+.profile-card-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.my-bot-public {
+  margin-top: 6px;
+}
+
+.my-bot-prompt.saved {
+  outline: 2px solid #34c759;
+}
+
+.my-bot-actions {
+  display: flex;
+  justify-content: flex-end;
 }
