@@ -396,6 +396,99 @@ function closeModal(modal) {
   }
 }
 
+// In-app dialog (replaces confirm/prompt)
+const dialogModal = document.getElementById('dialogModal');
+const dialogTitleEl = document.getElementById('dialogTitle');
+const dialogMessageEl = document.getElementById('dialogMessage');
+const dialogInputEl = document.getElementById('dialogInput');
+const dialogOkBtn = document.getElementById('dialogOkBtn');
+const dialogCancelBtn = document.getElementById('dialogCancelBtn');
+const dialogCloseBtn = document.getElementById('dialogClose');
+
+let dialogResolve = null;
+
+function closeDialog(result) {
+  if (dialogResolve) {
+    dialogResolve(result);
+    dialogResolve = null;
+  }
+  closeModal(dialogModal);
+}
+
+function ensureDialogBound() {
+  if (!dialogModal || dialogModal.dataset.bound) return;
+  dialogModal.dataset.bound = '1';
+
+  dialogOkBtn?.addEventListener('click', () => {
+    const value = dialogInputEl?.style.display === 'none' ? null : (dialogInputEl?.value || '');
+    closeDialog({ ok: true, value });
+  });
+
+  const cancel = () => closeDialog({ ok: false, value: null });
+  dialogCancelBtn?.addEventListener('click', cancel);
+  dialogCloseBtn?.addEventListener('click', cancel);
+
+  dialogModal.addEventListener('click', (e) => {
+    if (e.target === dialogModal) cancel();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (!dialogModal?.classList.contains('visible')) return;
+    if (e.key === 'Escape') cancel();
+    if (e.key === 'Enter' && dialogInputEl?.style.display !== 'none') {
+      e.preventDefault();
+      const value = dialogInputEl?.value || '';
+      closeDialog({ ok: true, value });
+    }
+  });
+}
+
+function openDialog({
+  title,
+  message,
+  okText = 'OK',
+  cancelText = 'Cancel',
+  showCancel = true,
+  input = false,
+  inputPlaceholder = '',
+  inputValue = '',
+  inputMaxLength = 160
+} = {}) {
+  ensureDialogBound();
+
+  if (!dialogModal) {
+    // Fallback: keep app usable even if modal missing
+    return Promise.resolve({ ok: true, value: input ? inputValue : null });
+  }
+
+  if (dialogTitleEl) dialogTitleEl.textContent = title || 'Confirm';
+  if (dialogMessageEl) dialogMessageEl.textContent = message || '';
+  if (dialogOkBtn) dialogOkBtn.textContent = okText;
+  if (dialogCancelBtn) {
+    dialogCancelBtn.textContent = cancelText;
+    dialogCancelBtn.style.display = showCancel ? '' : 'none';
+  }
+
+  if (dialogInputEl) {
+    dialogInputEl.style.display = input ? '' : 'none';
+    dialogInputEl.placeholder = inputPlaceholder || '';
+    dialogInputEl.value = inputValue || '';
+    dialogInputEl.maxLength = inputMaxLength;
+  }
+
+  openModal(dialogModal);
+
+  if (dialogInputEl && input) {
+    setTimeout(() => dialogInputEl.focus(), 0);
+  } else {
+    setTimeout(() => dialogOkBtn?.focus(), 0);
+  }
+
+  return new Promise((resolve) => {
+    dialogResolve = resolve;
+  });
+}
+
 // ============================================================
 // TOTP AUTHENTICATOR SIGNUP
 // ============================================================
@@ -539,6 +632,9 @@ function setupSidebarTabs() {
           loadModeration();
         }
       }
+
+      // Keep header state in sync with the active tab
+      setHeaderForTab(tabName);
     });
   });
 }
@@ -1030,7 +1126,13 @@ async function loadModeration() {
 }
 
 async function approveBot(botId) {
-  if (!confirm('Approve this bot? It will be visible in the marketplace.')) return;
+  const result = await openDialog({
+    title: 'Approve bot?',
+    message: 'This bot will be visible in the marketplace.',
+    okText: 'Approve',
+    cancelText: 'Cancel'
+  });
+  if (!result.ok) return;
 
   try {
     await window.essx.api(`/moderation/${botId}/approve`, { method: 'POST' });
@@ -1050,8 +1152,17 @@ async function approveBot(botId) {
 }
 
 async function rejectBot(botId) {
-  const reason = prompt('Enter rejection reason (optional):');
-  if (reason === null) return; // User cancelled
+  const result = await openDialog({
+    title: 'Reject bot',
+    message: 'Enter a reason (optional).',
+    okText: 'Reject',
+    cancelText: 'Cancel',
+    input: true,
+    inputPlaceholder: 'Reason (optional)',
+    inputMaxLength: 200
+  });
+  if (!result.ok) return;
+  const reason = (result.value || '').trim();
 
   try {
     await window.essx.api(`/moderation/${botId}/reject`, {
@@ -1179,6 +1290,7 @@ function setupModals() {
   // Sidebar Tabs Navigation
   setupSidebarTabs();
   setupMarketplaceControls();
+  setHeaderForTab(document.querySelector('.sidebar-tab.active')?.dataset?.tab || 'chats');
 
   // Login buttons
   googleLoginBtn?.addEventListener('click', async () => {
@@ -1943,22 +2055,36 @@ function setHeaderForTab(tabName) {
   if (tabName === 'marketplace') {
     if (contactName) contactName.textContent = 'Marketplace';
     if (avatarImg) avatarImg.src = makeIcon('🛍️', '#FF9500');
+    if (searchBtn) searchBtn.style.display = 'none';
+    searchBar?.classList.remove('active');
+    if (headerCenter) headerCenter.style.cursor = 'default';
+    contactModal?.classList.remove('active');
     return;
   }
 
   if (tabName === 'profile') {
     if (contactName) contactName.textContent = 'Profile';
     if (avatarImg) avatarImg.src = makeIcon('👤', '#34C759');
+    if (searchBtn) searchBtn.style.display = 'none';
+    searchBar?.classList.remove('active');
+    if (headerCenter) headerCenter.style.cursor = 'default';
+    contactModal?.classList.remove('active');
     return;
   }
 
   if (tabName === 'moderate') {
     if (contactName) contactName.textContent = 'Moderation';
     if (avatarImg) avatarImg.src = makeIcon('✅', '#5856D6');
+    if (searchBtn) searchBtn.style.display = 'none';
+    searchBar?.classList.remove('active');
+    if (headerCenter) headerCenter.style.cursor = 'default';
+    contactModal?.classList.remove('active');
     return;
   }
 
   // chats
+  if (searchBtn) searchBtn.style.display = '';
+  if (headerCenter) headerCenter.style.cursor = 'pointer';
   updateHeader();
 }
 
@@ -2271,7 +2397,13 @@ function renderChatList() {
 }
 
 async function deleteChat(id) {
-  if (!confirm('Delete this conversation?')) return;
+  const result = await openDialog({
+    title: 'Delete conversation?',
+    message: 'This will remove the chat from your account.',
+    okText: 'Delete',
+    cancelText: 'Cancel'
+  });
+  if (!result.ok) return;
 
   const chatItem = chatList.querySelector(`.chat-item[data-id="${id}"]`);
 
@@ -3951,6 +4083,8 @@ if (document.readyState === 'loading') {
 // ============================================================
 
 headerCenter?.addEventListener('click', () => {
+  if (activeTab !== 'chats') return;
+
   // Get current chat
   const currentChat = state.chats[state.currentChatId];
   if (!currentChat) return;

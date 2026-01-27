@@ -2,76 +2,16 @@ const express = require('express');
 const OpenAI = require('openai');
 const router = express.Router();
 const { requireAuth, optionalAuth } = require('../middleware/auth');
+const { getMarketplaceStrictTextRejectionReason } = require('../marketplaceTextFilters');
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
-function escapeRegExp(s) {
-  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function normalizeTextForMatch(text) {
-  const lowered = (text || '').toLowerCase();
-  const leetspeak = lowered
-    .replace(/0/g, 'o')
-    .replace(/1/g, 'i')
-    .replace(/3/g, 'e')
-    .replace(/4/g, 'a')
-    .replace(/5/g, 's')
-    .replace(/7/g, 't')
-    .replace(/8/g, 'b');
-  const spaced = leetspeak.replace(/[^a-z0-9]+/g, ' ').trim();
-  const compact = spaced.replace(/[^a-z0-9]/g, '');
-  return { spaced, compact };
-}
-
-function containsMarketplaceProfanity(text) {
-  const { spaced, compact } = normalizeTextForMatch(text);
-
-  // "Marketplace strict": block common swear words + slurs (covers spacing/punctuation/leetspeak).
-  const terms = [
-    'fuck',
-    'shit',
-    'bitch',
-    'asshole',
-    'cunt',
-    'dick',
-    'pussy',
-    'slut',
-    'whore',
-    'bastard',
-    'motherfucker',
-    'retard',
-    'nigger',
-    'nigga',
-    'faggot'
-  ];
-
-  for (const term of terms) {
-    const spacedRe = new RegExp(`\\b${escapeRegExp(term)}\\b`, 'i');
-    if (spacedRe.test(spaced)) return term;
-
-    // Also match compacted variants for longer terms (avoid false positives like "class" -> "ass")
-    if (term.length >= 4) {
-      const termCompact = normalizeTextForMatch(term).compact;
-      if (termCompact && compact.includes(termCompact)) return term;
-    }
-  }
-
-  return null;
-}
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 async function moderateBotContent({ name, description, systemPrompt }) {
   const input = `${name || ''}\n${description || ''}\n${systemPrompt || ''}`.trim();
 
-  const profanityHit = containsMarketplaceProfanity(input);
-  if (profanityHit) {
-    return {
-      approved: false,
-      rejected: true,
-      rejectionReason: 'Marketplace prohibits profanity'
-    };
+  const strictTextReason = getMarketplaceStrictTextRejectionReason({ name, description, systemPrompt });
+  if (strictTextReason) {
+    return { approved: false, rejected: true, rejectionReason: strictTextReason };
   }
 
   if (!process.env.OPENAI_API_KEY) {
@@ -99,6 +39,11 @@ async function moderateBotContent({ name, description, systemPrompt }) {
       .filter(([, value]) => value === true)
       .map(([key]) => key);
 
+    // Marketplace strict: reject sensitive content categories even if not "flagged".
+    const strictCategoryHits = flaggedCategories.filter((key) =>
+      /(sexual|hate|harassment|self-harm|violence|illicit|extremism)/i.test(key)
+    );
+
     if (flagged) {
       return {
         approved: false,
@@ -106,6 +51,14 @@ async function moderateBotContent({ name, description, systemPrompt }) {
         rejectionReason: flaggedCategories.length
           ? `Flagged: ${flaggedCategories.join(', ')}`
           : 'Flagged by moderation'
+      };
+    }
+
+    if (strictCategoryHits.length > 0) {
+      return {
+        approved: false,
+        rejected: true,
+        rejectionReason: `Marketplace restricted: ${strictCategoryHits.join(', ')}`
       };
     }
 
@@ -201,6 +154,13 @@ router.get('/code/:code', optionalAuth, async (req, res) => {
     console.error('Get bot by code error:', err);
     res.status(500).json({ error: 'Failed to get bot' });
   }
+});
+
+// Back-compat: older clients requested /api/bots/marketplace (bots router would treat it like an id).
+router.get('/marketplace', optionalAuth, async (req, res) => {
+  const idx = req.originalUrl.indexOf('?');
+  const qs = idx >= 0 ? req.originalUrl.slice(idx) : '';
+  return res.redirect(307, `/api/marketplace${qs}`);
 });
 
 // Get bot by ID

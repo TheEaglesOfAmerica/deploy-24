@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth, optionalAuth } = require('../middleware/auth');
+const { getMarketplaceStrictTextRejectionReason } = require('../marketplaceTextFilters');
 
 function parseCsv(value) {
   return (value || '')
@@ -30,6 +31,15 @@ function dailySeed() {
   let seed = 0;
   for (let i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) >>> 0;
   return seed >>> 0;
+}
+
+function isMarketplaceSafe(bot) {
+  const reason = getMarketplaceStrictTextRejectionReason({
+    name: `${bot?.name || ''} ${bot?.roblox_username || ''}`.trim(),
+    description: bot?.description || '',
+    systemPrompt: ''
+  });
+  return !reason;
 }
 
 // Get all approved bots for marketplace
@@ -104,8 +114,8 @@ router.get('/', optionalAuth, async (req, res) => {
       .limit(50);
 
     if (error) throw error;
-    let featuredFinal = featuredBots;
-    let mainBots = (bots || []).filter(b => !featuredIdSet.has(b.id));
+    let featuredFinal = featuredBots.filter(isMarketplaceSafe);
+    let mainBots = (bots || []).filter(b => !featuredIdSet.has(b.id)).filter(isMarketplaceSafe);
 
     // If nothing is explicitly featured, pick a daily-rotating set from the results.
     if (featuredFinal.length === 0) {
@@ -169,7 +179,7 @@ router.get('/search', optionalAuth, async (req, res) => {
       .limit(20);
 
     if (error) throw error;
-    res.json({ bots: bots || [] });
+    res.json({ bots: (bots || []).filter(isMarketplaceSafe) });
   } catch (err) {
     console.error('Search marketplace error:', err);
     res.status(500).json({ error: 'Failed to search marketplace' });

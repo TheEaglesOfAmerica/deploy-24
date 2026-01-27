@@ -682,6 +682,15 @@ body.theme-transitioning .app-container {
   font-size: 14px;
 }
 
+/* Dialog modal */
+.dialog-message {
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.4;
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+}
+
 /* ============================================================
    TOTP MODAL
    ============================================================ */

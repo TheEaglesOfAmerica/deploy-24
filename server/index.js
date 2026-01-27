@@ -39,6 +39,11 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
+function isCrawlerUserAgent(userAgent) {
+  const ua = String(userAgent || '').toLowerCase();
+  return /(facebookexternalhit|twitterbot|slackbot|discordbot|whatsapp|telegrambot|linkedinbot|embedly|quora link preview|googlebot|bingbot|duckduckbot|yandex|baiduspider|pinterest|applebot|ia_archiver)/i.test(ua);
+}
+
 // Share links with rich embeds (OG/Twitter)
 // Nginx should proxy /b/* here for this to work.
 app.get('/b/:code', async (req, res) => {
@@ -63,12 +68,21 @@ app.get('/b/:code', async (req, res) => {
     const title = `${bot.name || bot.roblox_username || 'Bot'} on Spunnie`;
     const desc = bot.description || `Chat with @${bot.roblox_username || 'bot'} on Spunnie.`;
     const image = bot.roblox_avatar_url || 'https://via.placeholder.com/300';
-    const url = `${req.protocol}://${req.get('host')}/b/${code}`;
 
     // Redirect humans into the SPA, but give crawlers OG tags.
     const appUrl = `/?b=${encodeURIComponent(code)}`;
 
+    // Most browsers should go straight to the SPA (no "HTML page" flash).
+    // Crawlers need the OG/Twitter meta, so we serve the HTML only for them.
+    if (!isCrawlerUserAgent(req.get('user-agent'))) {
+      return res.redirect(302, appUrl);
+    }
+
     res.set('Content-Type', 'text/html; charset=utf-8');
+
+    const proto = String(req.headers['x-forwarded-proto'] || req.protocol).split(',')[0].trim() || 'https';
+    const url = `${proto}://${req.get('host')}/b/${code}`;
+
     res.send(`<!doctype html>
 <html lang="en">
 <head>

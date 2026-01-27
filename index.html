@@ -317,11 +317,29 @@
       <div class="contact-modal-actions">
         <button class="contact-modal-btn secondary" id="closeContactModal">Close</button>
         <button class="contact-modal-btn primary" id="messageContact">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" style="vertical-align: middle; margin-right: 6px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="vertical-align: middle; margin-right: 6px;">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
           </svg>
           Message
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- In-app Dialog Modal (replaces confirm/prompt) -->
+  <div class="modal-backdrop" id="dialogModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="dialogTitle">Confirm</h3>
+        <button class="modal-close" id="dialogClose">×</button>
+      </div>
+      <div class="modal-content">
+        <div class="dialog-message" id="dialogMessage"></div>
+        <input type="text" id="dialogInput" class="form-input" style="display:none" />
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn secondary" id="dialogCancelBtn">Cancel</button>
+        <button class="modal-btn primary" id="dialogOkBtn">OK</button>
       </div>
     </div>
   </div>
