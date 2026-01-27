@@ -105,6 +105,27 @@ router.post('/totp/verify-signup', async (req, res) => {
   }
 });
 
+// Start authenticator-only signup (no auth required): generates secret + QR code
+router.post('/totp/signup/start', async (req, res) => {
+  try {
+    const secret = authenticator.generateSecret();
+
+    // Label without email: random id + app name
+    const label = require('crypto').randomUUID();
+    const otpauth = authenticator.keyuri(label, 'Chat Bots', secret);
+    const qrCodeUrl = await QRCode.toDataURL(otpauth);
+
+    res.json({
+      secret,
+      qrCode: qrCodeUrl,
+      message: 'Scan this QR code with your authenticator app'
+    });
+  } catch (err) {
+    console.error('TOTP signup start error:', err);
+    res.status(500).json({ error: 'Failed to start TOTP signup' });
+  }
+});
+
 // Verify TOTP code
 router.post('/totp/verify', requireAuth, async (req, res) => {
   try {

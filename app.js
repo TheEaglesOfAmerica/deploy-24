@@ -276,16 +276,17 @@ let totpSignupState = {
 
 async function startTotpSignup() {
   try {
-    // Generate TOTP secret and QR code
-    const { authenticator } = await import('otplib');
-    const QRCode = window.QRCode || (await import('qrcode'));
+    // Generate TOTP secret and QR code on the backend (browser can't import node modules)
+    const response = await window.essx.api('/auth/totp/signup/start', {
+      method: 'POST'
+    });
 
-    // Generate secret
-    const secret = authenticator.generateSecret();
+    const secret = response?.secret;
+    const qrCodeUrl = response?.qrCode;
 
-    // Create label without email
-    const otpauth = authenticator.keyuri(Date.now().toString(), 'Chat Bots', secret);
-    const qrCodeUrl = await QRCode.toDataURL(otpauth);
+    if (!secret || !qrCodeUrl) {
+      throw new Error('Missing secret/qrCode from server');
+    }
 
     // Store for verification
     totpSignupState.secret = secret;
