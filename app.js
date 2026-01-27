@@ -1731,6 +1731,7 @@ async function sendMessageSupabase(text) {
 
   chat.messages.push(userMsg);
   addMessageToDOM(userMsg, chat.messages.length - 1, true);
+  const userMsgIndex = chat.messages.length - 1;
 
   chatInput.value = '';
   chat.updatedAt = Date.now();
@@ -1747,6 +1748,15 @@ async function sendMessageSupabase(text) {
     hideTyping();
 
     if (response.assistantMessage) {
+      // Update read receipt on the user's last message
+      if (response.userMessage?.readAt) {
+        chat.messages[userMsgIndex].readAt = response.userMessage.readAt;
+        const receiptEl = chatArea.querySelector('.message-wrapper.sent:last-of-type .read-receipt');
+        if (receiptEl) {
+          receiptEl.textContent = `Read ${formatReadTime(response.userMessage.readAt)}`;
+        }
+      }
+
       // Add assistant message to local state
       chat.messages.push(response.assistantMessage);
       chat.conversation = response.conversation || chat.conversation;

@@ -193,6 +193,9 @@ router.post('/:id/message', requireAuth, async (req, res) => {
         timestamp: Date.now()
       };
 
+      // Mark the user's latest message as read when assistant responds
+      userMessage.readAt = Date.now();
+
       messages.push(assistantMessage);
       conversation.push({ role: 'assistant', content: assistantContent });
 

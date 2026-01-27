@@ -46,58 +46,6 @@
           </svg>
           Continue with Google
         </button>
-
-        <div class="login-divider">
-          <span>or</span>
-        </div>
-
-        <button class="login-btn totp-btn" id="totpSignupBtn">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-          </svg>
-          Sign Up with Authenticator
-        </button>
-      </div>
-
-      <p class="login-footer">No email needed, just your authenticator app</p>
-    </div>
-  </div>
-
-  <!-- Authenticator Signup Modal -->
-  <div class="modal-backdrop" id="totpModal">
-    <div class="modal-content totp-modal">
-      <div class="modal-header">
-        <h2>Sign Up with Authenticator</h2>
-        <button class="modal-close" id="closeTotpModal">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p class="step-indicator" id="totpStepIndicator">Step 1 of 2: Scan QR Code</p>
-
-        <!-- Step 1: Setup -->
-        <div id="totpSetupStep">
-          <p>Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, Authy, etc.)</p>
-          <div class="qr-code-container">
-            <img id="qrCodeImage" src="" alt="QR Code" class="qr-code">
-          </div>
-          <p class="backup-secret">Can't scan? Enter this code manually:</p>
-          <div class="secret-code" id="secretCode"></div>
-          <button class="modal-btn primary" id="totpSetupNextBtn">Next</button>
-        </div>
-
-        <!-- Step 2: Verify -->
-        <div id="totpVerifyStep" style="display: none;">
-          <p>Enter the 6-digit code from your authenticator app to confirm</p>
-          <div class="totp-code-input">
-            <input type="text" maxlength="1" class="totp-digit" data-index="0">
-            <input type="text" maxlength="1" class="totp-digit" data-index="1">
-            <input type="text" maxlength="1" class="totp-digit" data-index="2">
-            <input type="text" maxlength="1" class="totp-digit" data-index="3">
-            <input type="text" maxlength="1" class="totp-digit" data-index="4">
-            <input type="text" maxlength="1" class="totp-digit" data-index="5">
-          </div>
-          <button class="modal-btn primary" id="verifyTotpBtn">Verify & Sign Up</button>
-        </div>
       </div>
     </div>
   </div>

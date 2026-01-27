@@ -115,7 +115,12 @@ Output ONLY the system prompt text, nothing else. Make it detailed but focused.`
       temperature: 0.8
     });
 
-    const systemPrompt = completion.choices[0]?.message?.content || '';
+    const systemPromptBase = completion.choices[0]?.message?.content || '';
+    const weatherToolInstruction = `\n\nTooling:
+- This bot can use a weather tool.
+- When the user asks about weather, temperature, or forecast, respond with: [TOOL:weather city=CITY]
+- If no city is given, ask for one or use known location context.`;
+    const systemPrompt = `${systemPromptBase}${weatherToolInstruction}`;
 
     res.json({ systemPrompt });
   } catch (err) {
