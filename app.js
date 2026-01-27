@@ -75,6 +75,35 @@ let currentUser = null;
 let useSupabase = false; // Flag to switch between localStorage and Supabase
 let botSettingsBot = null;
 const PENDING_SHARE_CODE_KEY = 'spunnie_pending_share_code';
+const HAS_SUPABASE_CONFIG = typeof CONFIG !== 'undefined' && !!CONFIG.SUPABASE_URL;
+
+function showToast(message, type = 'info', timeoutMs = 2500) {
+  try {
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toastContainer';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    // Animate in
+    requestAnimationFrame(() => toast.classList.add('visible'));
+
+    setTimeout(() => {
+      toast.classList.remove('visible');
+      setTimeout(() => toast.remove(), 250);
+    }, timeoutMs);
+  } catch (e) {
+    // Last-resort fallback (should be rare)
+    console.log('Toast:', type, message);
+  }
+}
 
 function getShareCodeFromUrl() {
   try {
@@ -380,7 +409,7 @@ async function startTotpSignup() {
   try {
     // TOTP setup requires an authenticated Supabase user (server verifies via Bearer token)
     if (!window.essx?.isLoggedIn?.()) {
-      alert('Please sign in first (Google), then set up your authenticator.');
+      showToast('Please sign in first (Google), then set up your authenticator.', 'error');
       return;
     }
 
@@ -412,13 +441,13 @@ async function startTotpSignup() {
     openModal(totpModal);
   } catch (err) {
     console.error('TOTP signup start failed:', err);
-    alert('Failed to generate authenticator setup');
+    showToast('Failed to generate authenticator setup', 'error');
   }
 }
 
 function showTotpVerifyStep() {
   if (!totpSignupState.secret) {
-    alert('Please scan the QR code first');
+    showToast('Please scan the QR code first', 'error');
     return;
   }
 
@@ -436,13 +465,13 @@ async function completeTotpSignup() {
   const code = Array.from(digits).map(d => d.value).join('');
 
   if (code.length !== 6) {
-    alert('Please enter 6 digits');
+    showToast('Please enter 6 digits', 'error');
     return;
   }
 
   try {
     if (!window.essx?.isLoggedIn?.()) {
-      alert('Please sign in first (Google).');
+      showToast('Please sign in first (Google).', 'error');
       return;
     }
 
@@ -456,11 +485,11 @@ async function completeTotpSignup() {
 
     if (response.success) {
       closeModal(totpModal);
-      alert('Authenticator enabled successfully.');
+      showToast('Authenticator enabled successfully.', 'success');
     }
   } catch (err) {
     console.error('Verification failed:', err);
-    alert('Invalid code. Try again.');
+    showToast('Invalid code. Try again.', 'error');
   }
 }
 
@@ -754,7 +783,7 @@ async function addBotFromMarketplace(botId) {
     greet();
   } catch (err) {
     console.error('Failed to add bot:', err);
-    alert('Failed to add bot: ' + err.message);
+    showToast('Failed to add bot: ' + err.message, 'error');
   }
 }
 
@@ -848,7 +877,7 @@ async function openBotSettingsById(botId) {
     openBotSettings(bot);
   } catch (err) {
     console.error('Failed to open bot settings:', err);
-    alert('Failed to load bot settings');
+    showToast('Failed to load bot settings', 'error');
   }
 }
 
@@ -886,15 +915,15 @@ async function saveBotSettings() {
   const wantsPublic = !!botSettingsPublic?.checked;
 
   if (!name) {
-    alert('Name cannot be empty');
+    showToast('Name cannot be empty', 'error');
     return;
   }
   if (!prompt) {
-    alert('System prompt cannot be empty');
+    showToast('System prompt cannot be empty', 'error');
     return;
   }
   if (wantsPublic && botSettingsBot.approved !== true) {
-    alert('This bot must be approved before it can be public.');
+    showToast('This bot must be approved before it can be public.', 'error');
   }
 
   const updates = {
@@ -911,7 +940,7 @@ async function saveBotSettings() {
     await Promise.all([loadMyBots(), loadProfile()]);
   } catch (err) {
     console.error('Failed to save bot settings:', err);
-    alert(err.message || 'Failed to save changes');
+    showToast(err.message || 'Failed to save changes', 'error');
   }
 }
 
@@ -1013,10 +1042,10 @@ async function approveBot(botId) {
     // Reload moderation to update stats
     loadModeration();
 
-    alert('Bot approved successfully!');
+    showToast('Bot approved successfully!', 'success');
   } catch (err) {
     console.error('Failed to approve bot:', err);
-    alert('Failed to approve bot: ' + err.message);
+    showToast('Failed to approve bot: ' + err.message, 'error');
   }
 }
 
@@ -1037,10 +1066,10 @@ async function rejectBot(botId) {
     // Reload moderation to update stats
     loadModeration();
 
-    alert('Bot rejected successfully!');
+    showToast('Bot rejected successfully!', 'success');
   } catch (err) {
     console.error('Failed to reject bot:', err);
-    alert('Failed to reject bot: ' + err.message);
+    showToast('Failed to reject bot: ' + err.message, 'error');
   }
 }
 
@@ -1058,10 +1087,10 @@ Bot Details:
 - Created: ${new Date(bot.created_at).toLocaleDateString()}
     `.trim();
 
-    alert(details);
+    showToast(details, 'info', 6000);
   } catch (err) {
     console.error('Failed to view bot details:', err);
-    alert('Failed to load bot details');
+    showToast('Failed to load bot details', 'error');
   }
 }
 
@@ -1319,10 +1348,10 @@ function setupModals() {
       setupUserMenu();
       loadProfile();
       closeModal(editProfileModal);
-      alert('Profile updated successfully!');
+      showToast('Profile updated successfully!', 'success');
     } catch (err) {
       console.error('Failed to update profile:', err);
-      alert('Failed to update profile: ' + err.message);
+      showToast('Failed to update profile: ' + err.message, 'error');
     }
   });
 
@@ -1337,6 +1366,12 @@ function setupModals() {
   if (newChatBtn) {
     newChatBtn.removeEventListener('click', createChat);
     newChatBtn.addEventListener('click', () => {
+      if (HAS_SUPABASE_CONFIG && !useSupabase) {
+        showLoginScreen();
+        showToast('Sign in to start a chat', 'info');
+        return;
+      }
+
       if (useSupabase) {
         openModal(addBotModal);
       } else {
@@ -1532,7 +1567,7 @@ async function generateBotPrompt() {
     showWizardStep(3);
   } catch (err) {
     console.error('Bot creation failed:', err);
-    alert('Failed to create bot: ' + err.message);
+    showToast('Failed to create bot: ' + err.message, 'error');
   } finally {
     btnText.style.display = 'inline';
     btnLoading.style.display = 'none';
@@ -1580,7 +1615,7 @@ async function addBotByCode() {
   const code = Array.from(codeInputs).map(i => i.value).join('').toUpperCase();
 
   if (code.length !== 4) {
-    alert('Please enter a 4-digit code');
+    showToast('Please enter a 4-digit code', 'error');
     return;
   }
 
@@ -1589,7 +1624,7 @@ async function addBotByCode() {
     const bot = await window.essx.getBotByCode(code);
 
     if (!bot) {
-      alert('Bot not found with that code');
+      showToast('Bot not found with that code', 'error');
       return;
     }
 
@@ -1627,7 +1662,7 @@ async function addBotByCode() {
     }
   } catch (err) {
     console.error('Failed to add bot:', err);
-    alert('Failed to add bot: ' + err.message);
+    showToast('Failed to add bot: ' + err.message, 'error');
   }
 }
 
@@ -1895,6 +1930,38 @@ let state = {
   }
 };
 
+let activeTab = 'chats';
+
+function setHeaderForTab(tabName) {
+  activeTab = tabName || 'chats';
+
+  const makeIcon = (emoji, bg = '#007AFF') => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="${bg}"/><text x="50" y="66" font-size="44" fill="white" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700">${emoji}</text></svg>`;
+    return 'data:image/svg+xml,' + encodeURIComponent(svg);
+  };
+
+  if (tabName === 'marketplace') {
+    if (contactName) contactName.textContent = 'Marketplace';
+    if (avatarImg) avatarImg.src = makeIcon('🛍️', '#FF9500');
+    return;
+  }
+
+  if (tabName === 'profile') {
+    if (contactName) contactName.textContent = 'Profile';
+    if (avatarImg) avatarImg.src = makeIcon('👤', '#34C759');
+    return;
+  }
+
+  if (tabName === 'moderate') {
+    if (contactName) contactName.textContent = 'Moderation';
+    if (avatarImg) avatarImg.src = makeIcon('✅', '#5856D6');
+    return;
+  }
+
+  // chats
+  updateHeader();
+}
+
 // Load user profile from localStorage
 const PROFILE_KEY = 'imessage_user_profile';
 function loadUserProfile() {
@@ -2094,7 +2161,7 @@ function createChat(mood = null) {
 
 function getChat() {
   if (!state.currentChatId || !state.chats[state.currentChatId]) {
-    if (!useSupabase) {
+    if (!useSupabase && !HAS_SUPABASE_CONFIG) {
       createChat();
     } else {
       return null;
@@ -2706,7 +2773,7 @@ async function sendMessage() {
       saveUserProfile();
     } else {
       const remaining = Math.ceil((state.userProfile.suspendedUntil - Date.now()) / 60000);
-      alert(`you're suspended for ${remaining} more minutes. chill.`);
+      showToast(`you're suspended for ${remaining} more minutes. chill.`, 'error', 3500);
       return;
     }
   }

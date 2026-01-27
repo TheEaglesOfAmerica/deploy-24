@@ -177,7 +177,7 @@ router.post('/:id/message', requireAuth, async (req, res) => {
     // Call OpenAI
     try {
       const completion = await openai.responses.create({
-        model: 'gpt-5-nano',
+        model: 'gpt-5-mini',
         input: conversation,
         text: { format: { type: 'text' } },
         store: false
