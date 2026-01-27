@@ -640,6 +640,30 @@ body.theme-transitioning .app-container {
   transform: translateY(0);
 }
 
+/* Last Used Auth Method Badge */
+.last-used-badge {
+  font-size: 11px;
+  background: rgba(52, 199, 89, 0.9);
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+  font-weight: 600;
+  white-space: nowrap;
+  animation: fadeInBadge 0.3s ease;
+}
+
+@keyframes fadeInBadge {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* ============================================================
    MODALS (Generic)
    ============================================================ */

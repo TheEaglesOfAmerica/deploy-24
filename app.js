@@ -1264,10 +1264,29 @@ function setupModals() {
   // Sidebar Tabs Navigation
   setupSidebarTabs();
 
+  // Save last used auth method to localStorage
+  function saveLastAuthMethod(method) {
+    try {
+      localStorage.setItem('lastAuthMethod', method);
+    } catch (err) {
+      console.error('Failed to save auth method:', err);
+    }
+  }
+
+  // Get last used auth method from localStorage
+  function getLastAuthMethod() {
+    try {
+      return localStorage.getItem('lastAuthMethod') || 'google';
+    } catch (err) {
+      return 'google';
+    }
+  }
+
   // Login buttons
   googleLoginBtn?.addEventListener('click', async () => {
     setButtonLoading(googleLoginBtn, true);
     try {
+      saveLastAuthMethod('google');
       await window.essx.signInWithGoogle();
     } catch (err) {
       console.error('Google sign in failed:', err);
@@ -1281,6 +1300,7 @@ function setupModals() {
   discordBtn?.addEventListener('click', async () => {
     setButtonLoading(discordBtn, true);
     try {
+      saveLastAuthMethod('discord');
       await window.essx.signInWithDiscord();
     } catch (err) {
       console.error('Discord sign in failed:', err);
@@ -1294,6 +1314,7 @@ function setupModals() {
   const signinModeBtn = document.getElementById('signinModeBtn');
   const signupModeBtn = document.getElementById('signupModeBtn');
   const googleBtnText = document.getElementById('googleBtnText');
+  const moreOptionsBtnElement = document.getElementById('moreOptionsBtn');
 
   function switchAuthMode(mode) {
     currentAuthMode = mode;
@@ -1303,15 +1324,58 @@ function setupModals() {
       signinModeBtn?.classList.add('active');
       signupModeBtn?.classList.remove('active');
       googleBtnText.textContent = 'Continue with Google';
+
+      // Update "More options" button text
+      const moreOptionsText = moreOptionsBtnElement?.querySelector('span');
+      if (moreOptionsText) {
+        moreOptionsText.textContent = 'More sign in options';
+      }
     } else {
       signinModeBtn?.classList.remove('active');
       signupModeBtn?.classList.add('active');
       googleBtnText.textContent = 'Sign up with Google';
+
+      // Update "More options" button text
+      const moreOptionsText = moreOptionsBtnElement?.querySelector('span');
+      if (moreOptionsText) {
+        moreOptionsText.textContent = 'More sign up options';
+      }
     }
   }
 
   signinModeBtn?.addEventListener('click', () => switchAuthMode('signin'));
   signupModeBtn?.addEventListener('click', () => switchAuthMode('signup'));
+
+  // Highlight last used auth method
+  function highlightLastUsedMethod() {
+    const lastMethod = getLastAuthMethod();
+    const methodButtons = {
+      'google': googleLoginBtn,
+      'discord': discordBtn,
+      'passkey': passkeyLoginBtn,
+      'authenticator': authenticatorLoginBtn
+    };
+
+    // Remove any existing badges first
+    document.querySelectorAll('.last-used-badge').forEach(badge => badge.remove());
+
+    // Add badge to last used method
+    const lastUsedBtn = methodButtons[lastMethod];
+    if (lastUsedBtn) {
+      const badge = document.createElement('span');
+      badge.className = 'last-used-badge';
+      badge.textContent = 'Last used';
+
+      // Find the button's content span
+      const btnContent = lastUsedBtn.querySelector('.btn-content');
+      if (btnContent) {
+        btnContent.appendChild(badge);
+      }
+    }
+  }
+
+  // Call highlight function when login screen is shown
+  highlightLastUsedMethod();
 
   // More options toggle
   const moreOptionsBtn = document.getElementById('moreOptionsBtn');
@@ -1339,6 +1403,7 @@ function setupModals() {
   passkeyLoginBtn?.addEventListener('click', async () => {
     setButtonLoading(passkeyLoginBtn, true);
     try {
+      saveLastAuthMethod('passkey');
       await signInWithPasskey();
       showToast('Signed in successfully!');
     } catch (err) {
@@ -1386,6 +1451,7 @@ function setupModals() {
       });
 
       if (result.success) {
+        saveLastAuthMethod('authenticator');
         closeModal(authenticatorLoginModal);
         showToast('Signed in successfully!');
         // Refresh auth state
