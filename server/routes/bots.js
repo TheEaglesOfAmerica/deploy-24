@@ -1,73 +1,63 @@
 const express = require('express');
+const OpenAI = require('openai');
 const router = express.Router();
 const { requireAuth, optionalAuth } = require('../middleware/auth');
 
-function normalizeModerationText(text) {
-  const lowered = (text || '').toLowerCase();
-  const leetspeak = lowered
-    .replace(/0/g, 'o')
-    .replace(/1/g, 'i')
-    .replace(/3/g, 'e')
-    .replace(/4/g, 'a')
-    .replace(/5/g, 's')
-    .replace(/7/g, 't')
-    .replace(/8/g, 'b');
-  const spaced = leetspeak.replace(/[^a-z0-9]+/g, ' ').trim();
-  const compact = spaced.replace(/[^a-z0-9]/g, '');
-  return { spaced, compact };
-}
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
-function moderateBotContent({ name, description, systemPrompt }) {
-  const rawText = `${name || ''}\n${description || ''}\n${systemPrompt || ''}`;
-  const { spaced, compact } = normalizeModerationText(rawText);
+async function moderateBotContent({ name, description, systemPrompt }) {
+  const input = `${name || ''}\n${description || ''}\n${systemPrompt || ''}`.trim();
 
-  const bannedTerms = [
-    'rape',
-    'sexual assault',
-    'child porn',
-    'kill yourself',
-    'kys',
-    'nigger',
-    'faggot',
-    'hitler',
-    'isis',
-    'bestiality',
-    'white power',
-    'kkk',
-    'nazi',
-    'genocide',
-    'ethnic cleansing',
-    'gas the',
-    'lynch'
-  ];
-
-  const normalizedTerms = bannedTerms.map(term => {
-    const termNorm = normalizeModerationText(term);
+  if (!process.env.OPENAI_API_KEY) {
     return {
-      raw: term,
-      spaced: termNorm.spaced,
-      compact: termNorm.compact
-    };
-  });
-
-  const hit = normalizedTerms.find(term => {
-    if (!term.spaced) return false;
-    return spaced.includes(term.spaced) || compact.includes(term.compact);
-  });
-
-  if (hit) {
-    return {
-      approved: false,
-      rejected: true,
-      rejectionReason: 'Prohibited or hateful content detected'
+      approved: null,
+      rejected: null,
+      rejectionReason: 'Moderation unavailable (missing API key)'
     };
   }
 
-  return {
-    approved: true,
-    rejected: false,
-    rejectionReason: null
-  };
+  try {
+    const response = await openai.moderations.create({
+      model: 'omni-moderation-latest',
+      input
+    });
+
+    const result = response?.results?.[0];
+    if (!result) {
+      throw new Error('No moderation result');
+    }
+
+    const flagged = result.flagged === true;
+    const categories = result.categories || {};
+    const flaggedCategories = Object.entries(categories)
+      .filter(([, value]) => value === true)
+      .map(([key]) => key);
+
+    if (flagged) {
+      return {
+        approved: false,
+        rejected: true,
+        rejectionReason: flaggedCategories.length
+          ? `Flagged: ${flaggedCategories.join(', ')}`
+          : 'Flagged by moderation'
+      };
+    }
+
+    return {
+      approved: true,
+      rejected: false,
+      rejectionReason: null
+    };
+  } catch (err) {
+    console.error('Moderation API error:', err?.message || err);
+    return {
+      approved: null,
+      rejected: null,
+      rejectionReason: 'Moderation unavailable — retrying'
+    };
+  }
 }
 
 function buildModerationStatus(bot) {
@@ -94,11 +84,11 @@ function buildModerationStatus(bot) {
   const stuckThresholdMinutes = 30;
   const isStuck = ageMinutes !== null && ageMinutes >= stuckThresholdMinutes;
 
-  let message = 'Pending — queued';
+  let message = bot.rejection_reason ? `Pending — ${bot.rejection_reason}` : 'Pending — queued';
   if (ageMinutes !== null) {
     message = isStuck
-      ? `Pending — stuck (${ageMinutes}m). Try editing description or contact support.`
-      : `Pending — queued (${ageMinutes}m ago)`;
+      ? `Pending — stuck (${ageMinutes}m). ${bot.rejection_reason || 'Try editing description or contact support.'}`
+      : (bot.rejection_reason ? `Pending — ${bot.rejection_reason}` : `Pending — queued (${ageMinutes}m ago)`);
   }
 
   return {
@@ -194,18 +184,20 @@ router.get('/', requireAuth, async (req, res) => {
     const pendingBots = botsData.filter(bot => bot.approved === null && bot.rejected === null);
     if (pendingBots.length > 0) {
       await Promise.all(pendingBots.map(async (bot) => {
-        const moderation = moderateBotContent({
+        const moderation = await moderateBotContent({
           name: bot.name,
           description: bot.description,
           systemPrompt: bot.system_prompt
         });
+        const approved = moderation.approved === true ? true : (moderation.rejected === true ? false : null);
+        const rejected = moderation.rejected === true ? true : (moderation.approved === true ? false : null);
         const { error: updateError } = await supabase
           .from('bots')
           .update({
-            approved: moderation.approved,
-            rejected: moderation.rejected,
-            rejection_reason: moderation.rejectionReason,
-            is_public: moderation.approved ? !!bot.is_public : false,
+            approved,
+            rejected,
+            rejection_reason: moderation.rejectionReason || null,
+            is_public: approved === true ? !!bot.is_public : false,
             moderated_at: new Date().toISOString()
           })
           .eq('id', bot.id);
@@ -282,11 +274,13 @@ router.post('/', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to generate unique code' });
     }
 
-    const moderation = moderateBotContent({
+    const moderation = await moderateBotContent({
       name,
       description,
       systemPrompt: system_prompt
     });
+    const approved = moderation.approved === true ? true : (moderation.rejected === true ? false : null);
+    const rejected = moderation.rejected === true ? true : (moderation.approved === true ? false : null);
 
     // Create the bot
     const { data: bot, error } = await supabase
@@ -300,10 +294,10 @@ router.post('/', requireAuth, async (req, res) => {
         name,
         description,
         system_prompt,
-        is_public: moderation.approved ? !!is_public : false,
-        approved: moderation.approved,
-        rejected: moderation.rejected,
-        rejection_reason: moderation.rejectionReason,
+        is_public: approved === true ? !!is_public : false,
+        approved,
+        rejected,
+        rejection_reason: moderation.rejectionReason || null,
         moderated_at: new Date().toISOString()
       })
       .select()
