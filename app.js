@@ -48,6 +48,8 @@ const tutorialMarketplaceBtn = document.getElementById('tutorialMarketplaceBtn')
 const loginScreen = document.getElementById('loginScreen');
 const googleLoginBtn = document.getElementById('googleLoginBtn');
 const loginHint = document.getElementById('loginHint');
+const loadingSplash = document.getElementById('loadingSplash');
+const loadingText = document.getElementById('loadingText');
 const totpSignupBtn = document.getElementById('totpSignupBtn');
 const totpModal = document.getElementById('totpModal');
 const closeTotpModal = document.getElementById('closeTotpModal');
@@ -82,10 +84,26 @@ let useSupabase = false; // Flag to switch between localStorage and Supabase
 let loginPending = false;
 const LOGIN_HINT_DEFAULT = 'You’ll be redirected to Google and back.';
 const TUTORIAL_KEY = 'imessage_tutorial_seen_v1';
+const LOADING_TEXT_DEFAULT = 'Chat Bots';
+let authTransitionActive = false;
+let loadingHideTimer = null;
+let loadingRemoveTimer = null;
 
 function setLoginHint(text) {
   if (loginHint) {
     loginHint.textContent = text || LOGIN_HINT_DEFAULT;
+  }
+}
+
+function showLoadingSplash(text) {
+  if (!loadingSplash) return;
+  if (loadingHideTimer) clearTimeout(loadingHideTimer);
+  if (loadingRemoveTimer) clearTimeout(loadingRemoveTimer);
+  loadingSplash.classList.remove('hidden');
+  loadingSplash.style.display = 'flex';
+  loadingSplash.style.pointerEvents = 'auto';
+  if (loadingText && text) {
+    loadingText.textContent = text;
   }
 }
 
@@ -165,6 +183,8 @@ function hideLoginScreen() {
 
 async function handleAuthSuccess(user) {
   console.log('✅ Auth success:', user?.email);
+  authTransitionActive = true;
+  showLoadingSplash('Signing you in…');
   isAuthenticated = true;
   currentUser = user;
   useSupabase = true;
@@ -173,18 +193,18 @@ async function handleAuthSuccess(user) {
   hideLoginScreen();
   closeSidebar();
   clearBlockingOverlays();
-  hideLoadingSplash({ immediate: true });
-  setTimeout(() => hideLoadingSplash({ immediate: true }), 1500);
 
   // Load chats from Supabase
   try {
-    await withTimeout(loadChatsFromSupabase(), 4000);
+    await withTimeout(loadChatsFromSupabase(), 9000);
   } catch (e) {
     console.error('Chat load timed out/failed:', e);
   } finally {
     renderChatList();
     renderMessages();
     updateHeader();
+    authTransitionActive = false;
+    hideLoadingSplash({ immediate: true, force: true });
   }
 
   // Setup user menu in sidebar
@@ -199,9 +219,11 @@ function handleSignOut() {
   useSupabase = false;
   state.chats = {};
   state.currentChatId = null;
+  authTransitionActive = false;
 
   resetLoginState();
   clearBlockingOverlays();
+  hideLoadingSplash({ immediate: true, force: true });
   showLoginScreen();
   renderChatList();
 }
@@ -3318,7 +3340,7 @@ async function init() {
     // Supabase available but not logged in - show login screen
     console.log('🔐 Supabase available, waiting for login');
     // Hide loading splash to show login screen
-    hideLoadingSplash();
+    hideLoadingSplash({ immediate: true, force: true });
     return; // Don't proceed until logged in
   } else {
     // Fallback to localStorage mode
@@ -3354,26 +3376,37 @@ async function init() {
   }, 100);
 
   // Hide loading splash
-  hideLoadingSplash();
+  if (!authTransitionActive) {
+    hideLoadingSplash();
+  }
 
   console.log('✨ Init complete');
 }
 
-function hideLoadingSplash({ immediate = false } = {}) {
-  const loadingSplash = document.getElementById('loadingSplash');
+function hideLoadingSplash({ immediate = false, force = false } = {}) {
   if (!loadingSplash) return;
+  if (authTransitionActive && !force && !immediate) return;
+  if (loadingHideTimer) clearTimeout(loadingHideTimer);
+  if (loadingRemoveTimer) clearTimeout(loadingRemoveTimer);
+
+  const resetLoadingText = () => {
+    if (loadingText) loadingText.textContent = LOADING_TEXT_DEFAULT;
+  };
 
   if (immediate) {
     loadingSplash.classList.add('hidden');
     loadingSplash.style.pointerEvents = 'none';
     loadingSplash.style.display = 'none';
+    resetLoadingText();
     return;
   }
 
-  setTimeout(() => {
+  loadingHideTimer = setTimeout(() => {
     loadingSplash.classList.add('hidden');
-    setTimeout(() => {
+    loadingRemoveTimer = setTimeout(() => {
       loadingSplash.style.display = 'none';
+      loadingSplash.style.pointerEvents = 'none';
+      resetLoadingText();
     }, 800);
   }, 300);
 }
