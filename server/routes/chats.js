@@ -106,14 +106,14 @@ router.post('/', requireAuth, async (req, res) => {
       return res.json({ id: existingChat.id, existing: true });
     }
 
-    // Create new chat
+    // Create new chat (conversation will be initialized on first message)
     const { data: chat, error } = await supabase
       .from('chats')
       .insert({
         user_id: req.user.id,
         bot_id,
         messages: [],
-        conversation: [{ role: 'system', content: bot.system_prompt }],
+        conversation: [],
         notes: []
       })
       .select()
@@ -130,6 +130,45 @@ router.post('/', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Failed to create chat' });
   }
 });
+
+// Base system prompt for all bots (server-controlled)
+const BASE_SYSTEM_PROMPT = `You are a helpful AI assistant designed to chat naturally like a friend.
+
+Core Guidelines:
+- Keep responses concise (under 150 characters typically, like texting)
+- Use casual internet/texting language (lowercase, abbreviations, etc.)
+- Be friendly and engaging
+- Stay in character based on your personality description
+- Keep it appropriate for general audiences
+
+Tools Available:
+You have access to a weather tool. When the user asks about weather, temperature, or forecast:
+- Respond with: [TOOL:weather city=CITY_NAME]
+- If no city is provided, ask for one first
+- After using the tool, incorporate the weather data naturally into your response
+
+Remember to stay true to your personality while being helpful!`;
+
+// Tool definitions for OpenAI
+const TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_weather',
+      description: 'Get current weather information for a specific city',
+      parameters: {
+        type: 'object',
+        properties: {
+          city: {
+            type: 'string',
+            description: 'The city name to get weather for, e.g. "San Francisco"'
+          }
+        },
+        required: ['city']
+      }
+    }
+  }
+];
 
 // Send a message in a chat
 router.post('/:id/message', requireAuth, async (req, res) => {
@@ -161,6 +200,12 @@ router.post('/:id/message', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Chat not found' });
     }
 
+    // Combine base prompt with bot's custom prompt
+    const fullSystemPrompt = `${BASE_SYSTEM_PROMPT}
+
+Personality Description:
+${chat.bots.system_prompt || 'Be helpful and friendly.'}`;
+
     // Add user message to history
     const userMessage = {
       type: 'sent',
@@ -169,22 +214,73 @@ router.post('/:id/message', requireAuth, async (req, res) => {
     };
 
     const messages = [...(chat.messages || []), userMessage];
-    const conversation = [...(chat.conversation || [])];
+    let conversation = [...(chat.conversation || [])];
+
+    // Update system prompt if it's the first message or if it changed
+    if (conversation.length === 0 || conversation[0].role !== 'system') {
+      conversation = [{ role: 'system', content: fullSystemPrompt }, ...conversation];
+    } else {
+      conversation[0].content = fullSystemPrompt;
+    }
 
     // Add user message to conversation
     conversation.push({ role: 'user', content: text });
 
-    // Call OpenAI
+    // Call OpenAI with tools
     try {
-      const completion = await openai.responses.create({
-        model: 'gpt-5-mini',
-        input: conversation,
-        text: { format: { type: 'text' } },
-        store: false
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: conversation,
+        tools: TOOLS,
+        tool_choice: 'auto',
+        temperature: 0.8,
+        max_tokens: 300
       });
 
-      // Extract assistant response
-      const assistantContent = completion.output?.find(item => item.type === 'message')?.content?.[0]?.text || '';
+      const responseMessage = completion.choices[0].message;
+      let assistantContent = responseMessage.content || '';
+
+      // Handle tool calls
+      if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+        const toolCall = responseMessage.tool_calls[0];
+
+        // Add assistant's tool call to conversation
+        conversation.push(responseMessage);
+
+        if (toolCall.function.name === 'get_weather') {
+          const args = JSON.parse(toolCall.function.arguments);
+          const city = args.city;
+
+          // Simulate weather data (in production, call a real weather API)
+          const weatherData = {
+            city: city,
+            temperature: Math.floor(Math.random() * 30) + 50,
+            condition: ['sunny', 'cloudy', 'rainy', 'partly cloudy'][Math.floor(Math.random() * 4)],
+            humidity: Math.floor(Math.random() * 40) + 40
+          };
+
+          const toolResponse = {
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(weatherData)
+          };
+
+          conversation.push(toolResponse);
+
+          // Get final response with weather data
+          const finalCompletion = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: conversation,
+            temperature: 0.8,
+            max_tokens: 300
+          });
+
+          assistantContent = finalCompletion.choices[0].message.content || '';
+          conversation.push({ role: 'assistant', content: assistantContent });
+        }
+      } else {
+        conversation.push({ role: 'assistant', content: assistantContent });
+      }
 
       // Add assistant message to history
       const assistantMessage = {
@@ -197,7 +293,6 @@ router.post('/:id/message', requireAuth, async (req, res) => {
       userMessage.readAt = Date.now();
 
       messages.push(assistantMessage);
-      conversation.push({ role: 'assistant', content: assistantContent });
 
       // Update chat in database
       const { error: updateError } = await supabase

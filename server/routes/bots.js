@@ -1,127 +1,6 @@
 const express = require('express');
-const OpenAI = require('openai');
 const router = express.Router();
 const { requireAuth, optionalAuth } = require('../middleware/auth');
-const { getMarketplaceStrictTextRejectionReason } = require('../marketplaceTextFilters');
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-async function moderateBotContent({ name, description, systemPrompt }) {
-  const input = `${name || ''}\n${description || ''}\n${systemPrompt || ''}`.trim();
-
-  const strictTextReason = getMarketplaceStrictTextRejectionReason({ name, description, systemPrompt });
-  if (strictTextReason) {
-    return { approved: false, rejected: true, rejectionReason: strictTextReason };
-  }
-
-  if (!process.env.OPENAI_API_KEY) {
-    return {
-      approved: null,
-      rejected: null,
-      rejectionReason: 'Moderation unavailable (missing API key)'
-    };
-  }
-
-  try {
-    const response = await openai.moderations.create({
-      model: 'omni-moderation-latest',
-      input
-    });
-
-    const result = response?.results?.[0];
-    if (!result) {
-      throw new Error('No moderation result');
-    }
-
-    const flagged = result.flagged === true;
-    const categories = result.categories || {};
-    const flaggedCategories = Object.entries(categories)
-      .filter(([, value]) => value === true)
-      .map(([key]) => key);
-
-    // Marketplace strict: reject sensitive content categories even if not "flagged".
-    const strictCategoryHits = flaggedCategories.filter((key) =>
-      /(sexual|hate|harassment|self-harm|violence|illicit|extremism)/i.test(key)
-    );
-
-    if (flagged) {
-      return {
-        approved: false,
-        rejected: true,
-        rejectionReason: flaggedCategories.length
-          ? `Flagged: ${flaggedCategories.join(', ')}`
-          : 'Flagged by moderation'
-      };
-    }
-
-    if (strictCategoryHits.length > 0) {
-      return {
-        approved: false,
-        rejected: true,
-        rejectionReason: `Marketplace restricted: ${strictCategoryHits.join(', ')}`
-      };
-    }
-
-    return {
-      approved: true,
-      rejected: false,
-      rejectionReason: null
-    };
-  } catch (err) {
-    console.error('Moderation API error:', err?.message || err);
-    return {
-      approved: null,
-      rejected: null,
-      rejectionReason: 'Moderation unavailable — retrying'
-    };
-  }
-}
-
-function normalizeModerationDecision(moderationResult) {
-  const approved = moderationResult.approved === true ? true : (moderationResult.rejected === true ? false : null);
-  const rejected = moderationResult.rejected === true ? true : (moderationResult.approved === true ? false : null);
-  const rejectionReason = moderationResult.rejectionReason || null;
-  return { approved, rejected, rejectionReason };
-}
-
-function buildModerationStatus(bot) {
-  if (bot.approved === true) {
-    return {
-      status: 'approved',
-      message: 'Approved',
-      is_stuck: false,
-      pending_age_minutes: null
-    };
-  }
-
-  if (bot.rejected === true) {
-    return {
-      status: 'rejected',
-      message: bot.rejection_reason ? `Rejected — ${bot.rejection_reason}` : 'Rejected',
-      is_stuck: false,
-      pending_age_minutes: null
-    };
-  }
-
-  const createdAtMs = bot.created_at ? new Date(bot.created_at).getTime() : null;
-  const ageMinutes = createdAtMs ? Math.max(0, Math.floor((Date.now() - createdAtMs) / 60000)) : null;
-  const stuckThresholdMinutes = 30;
-  const isStuck = ageMinutes !== null && ageMinutes >= stuckThresholdMinutes;
-
-  let message = bot.rejection_reason ? `Pending — ${bot.rejection_reason}` : 'Pending — queued';
-  if (ageMinutes !== null) {
-    message = isStuck
-      ? `Pending — stuck (${ageMinutes}m). ${bot.rejection_reason || 'Try editing description or contact support.'}`
-      : (bot.rejection_reason ? `Pending — ${bot.rejection_reason}` : `Pending — queued (${ageMinutes}m ago)`);
-  }
-
-  return {
-    status: 'pending',
-    message,
-    is_stuck: isStuck,
-    pending_age_minutes: ageMinutes
-  };
-}
 
 // Generate a unique 4-character code
 function generateShareCode() {
@@ -131,6 +10,40 @@ function generateShareCode() {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
+}
+
+// Lightweight auto-moderation to avoid bots getting stuck in pending
+function moderateBotContent({ name, description, systemPrompt }) {
+  const bannedTerms = [
+    'rape',
+    'sexual assault',
+    'child porn',
+    'cp ',
+    'kill yourself',
+    'kys',
+    'nigger',
+    'faggot',
+    'hitler',
+    'isis',
+    'bestiality'
+  ];
+
+  const combined = `${name || ''}\n${description || ''}\n${systemPrompt || ''}`.toLowerCase();
+  const matched = bannedTerms.find(term => combined.includes(term));
+
+  if (matched) {
+    return {
+      approved: false,
+      rejected: true,
+      reason: `Blocked term detected: ${matched.trim()}`
+    };
+  }
+
+  return {
+    approved: true,
+    rejected: false,
+    reason: null
+  };
 }
 
 // Get bot by share code (public)
@@ -156,13 +69,6 @@ router.get('/code/:code', optionalAuth, async (req, res) => {
   }
 });
 
-// Back-compat: older clients requested /api/bots/marketplace (bots router would treat it like an id).
-router.get('/marketplace', optionalAuth, async (req, res) => {
-  const idx = req.originalUrl.indexOf('?');
-  const qs = idx >= 0 ? req.originalUrl.slice(idx) : '';
-  return res.redirect(307, `/api/marketplace${qs}`);
-});
-
 // Get bot by ID
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
@@ -184,14 +90,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
       delete bot.system_prompt;
     }
 
-    const moderationStatus = buildModerationStatus(bot);
-    res.json({
-      ...bot,
-      moderation_status: moderationStatus.status,
-      moderation_message: moderationStatus.message,
-      moderation_is_stuck: moderationStatus.is_stuck,
-      moderation_age_minutes: moderationStatus.pending_age_minutes
-    });
+    res.json(bot);
   } catch (err) {
     console.error('Get bot error:', err);
     res.status(500).json({ error: 'Failed to get bot' });
@@ -203,59 +102,52 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const supabase = req.app.locals.supabase;
 
-    const { data: bots, error } = await supabase
+    let { data: bots, error } = await supabase
       .from('bots')
       .select('*')
       .eq('creator_id', req.user.id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    let botsData = bots || [];
 
-    const pendingBots = botsData.filter(bot => bot.approved === null && bot.rejected === null);
+    // Auto-moderate any legacy pending bots so they don't stay stuck forever
+    const pendingBots = (bots || []).filter(bot => bot.approved === null && bot.rejected === null);
     if (pendingBots.length > 0) {
       await Promise.all(pendingBots.map(async (bot) => {
-        const moderation = await moderateBotContent({
-          name: `${bot.name || ''} ${bot.roblox_username || ''}`.trim(),
-          description: bot.description,
-          systemPrompt: bot.system_prompt
-        });
-        const { approved, rejected, rejectionReason } = normalizeModerationDecision(moderation);
-        const { error: updateError } = await supabase
-          .from('bots')
-          .update({
-            approved,
-            rejected,
-            rejection_reason: rejectionReason,
-            is_public: approved === true ? !!bot.is_public : false,
-            moderated_at: new Date().toISOString()
-          })
-          .eq('id', bot.id);
-        if (updateError) {
-          console.error('Auto-moderation update failed for bot:', bot.id, updateError);
+        try {
+          const moderation = moderateBotContent({
+            name: bot.name,
+            description: bot.description,
+            systemPrompt: bot.system_prompt
+          });
+
+          await supabase
+            .from('bots')
+            .update({
+              approved: moderation.approved,
+              rejected: moderation.rejected,
+              rejection_reason: moderation.reason,
+              is_public: moderation.approved ? !!bot.is_public : false,
+              moderated_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', bot.id);
+        } catch (moderationErr) {
+          console.error('Auto-moderation failed for bot:', bot.id, moderationErr);
         }
       }));
 
-      const { data: refreshed } = await supabase
+      const { data: refreshed, error: refreshError } = await supabase
         .from('bots')
         .select('*')
         .eq('creator_id', req.user.id)
         .order('created_at', { ascending: false });
-      botsData = refreshed || botsData;
+
+      if (refreshError) throw refreshError;
+      bots = refreshed;
     }
 
-    const enriched = (botsData || []).map(bot => {
-      const moderationStatus = buildModerationStatus(bot);
-      return {
-        ...bot,
-        moderation_status: moderationStatus.status,
-        moderation_message: moderationStatus.message,
-        moderation_is_stuck: moderationStatus.is_stuck,
-        moderation_age_minutes: moderationStatus.pending_age_minutes
-      };
-    });
-
-    res.json(enriched);
+    res.json(bots || []);
   } catch (err) {
     console.error('Get user bots error:', err);
     res.status(500).json({ error: 'Failed to get bots' });
@@ -280,6 +172,8 @@ router.post('/', requireAuth, async (req, res) => {
     }
 
     const supabase = req.app.locals.supabase;
+    const moderation = moderateBotContent({ name, description, systemPrompt: system_prompt });
+    const requestedPublic = is_public === true;
 
     // Generate unique share code
     let shareCode;
@@ -304,13 +198,6 @@ router.post('/', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Failed to generate unique code' });
     }
 
-    const moderation = await moderateBotContent({
-      name: `${name || ''} ${roblox_username || ''}`.trim(),
-      description,
-      systemPrompt: system_prompt
-    });
-    const { approved, rejected, rejectionReason } = normalizeModerationDecision(moderation);
-
     // Create the bot
     const { data: bot, error } = await supabase
       .from('bots')
@@ -323,10 +210,10 @@ router.post('/', requireAuth, async (req, res) => {
         name,
         description,
         system_prompt,
-        is_public: approved === true ? !!is_public : false,
-        approved,
-        rejected,
-        rejection_reason: rejectionReason,
+        is_public: moderation.approved ? requestedPublic : false,
+        approved: moderation.approved,
+        rejected: moderation.rejected,
+        rejection_reason: moderation.reason,
         moderated_at: new Date().toISOString()
       })
       .select()
@@ -344,13 +231,13 @@ router.post('/', requireAuth, async (req, res) => {
 router.patch('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, system_prompt, roblox_username, is_public } = req.body;
+    const { name, description, system_prompt, is_public } = req.body;
     const supabase = req.app.locals.supabase;
 
     // Check ownership
     const { data: existing } = await supabase
       .from('bots')
-      .select('id, creator_id, name, roblox_username, description, system_prompt, approved, rejected, is_public')
+      .select('creator_id, approved')
       .eq('id', id)
       .single();
 
@@ -358,46 +245,15 @@ router.patch('/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    if (is_public === true && existing.approved !== true) {
-      return res.status(400).json({ error: 'Bot must be approved before it can be public' });
-    }
-
     const updatePayload = {
       updated_at: new Date().toISOString()
     };
+
     if (typeof name === 'string') updatePayload.name = name;
     if (typeof description === 'string') updatePayload.description = description;
     if (typeof system_prompt === 'string') updatePayload.system_prompt = system_prompt;
-    if (typeof roblox_username === 'string') updatePayload.roblox_username = roblox_username;
-    if (typeof is_public === 'boolean') updatePayload.is_public = is_public;
-
-    const shouldRemoderate =
-      typeof name === 'string' ||
-      typeof description === 'string' ||
-      typeof system_prompt === 'string' ||
-      typeof roblox_username === 'string';
-
-    if (shouldRemoderate) {
-      const mergedName = `${typeof name === 'string' ? name : (existing.name || '')} ${typeof roblox_username === 'string' ? roblox_username : (existing.roblox_username || '')}`.trim();
-      const mergedDescription = typeof description === 'string' ? description : existing.description;
-      const mergedPrompt = typeof system_prompt === 'string' ? system_prompt : existing.system_prompt;
-
-      const moderation = await moderateBotContent({
-        name: mergedName,
-        description: mergedDescription,
-        systemPrompt: mergedPrompt
-      });
-      const { approved, rejected, rejectionReason } = normalizeModerationDecision(moderation);
-
-      updatePayload.approved = approved;
-      updatePayload.rejected = rejected;
-      updatePayload.rejection_reason = rejectionReason;
-      updatePayload.moderated_at = new Date().toISOString();
-
-      // Never allow public unless currently approved.
-      if (approved !== true) {
-        updatePayload.is_public = false;
-      }
+    if (typeof is_public === 'boolean') {
+      updatePayload.is_public = existing.approved === true ? is_public : false;
     }
 
     const { data: bot, error } = await supabase
