@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Chat Bots</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" type="image/png" id="favicon" href="https://tr.rbxcdn.com/30DAY-AvatarHeadshot-694A8E7E5BEEA03F431BD7D696694A14-Png/150/150/AvatarHeadshot/Png/noFilter" />
+  <link rel="stylesheet" href="styles.css?v=7" />
+</head>
+<body>
+  <!-- Animated Gradient Background -->
+  <div class="gradient-bg" id="gradientBg">
+    <div class="gradient-orb orb-1"></div>
+    <div class="gradient-orb orb-2"></div>
+    <div class="gradient-orb orb-3"></div>
+  </div>
+
+  <!-- Loading Splash Screen -->
+  <div class="loading-splash" id="loadingSplash">
+    <div class="loading-content">
+      <div class="loading-logo">💬</div>
+      <div class="loading-text">Chat Bots</div>
+      <div class="loading-bar">
+        <div class="loading-progress"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Login Screen -->
+  <div class="login-screen" id="loginScreen">
+    <div class="login-container">
+      <div class="login-logo">💬</div>
+      <h1 class="login-title">Chat Bots</h1>
+      <p class="login-subtitle">Create and share AI bots based on Roblox users</p>
+
+      <div class="login-buttons">
+        <button class="login-btn google-btn" id="googleLoginBtn">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          Continue with Google
+        </button>
+
+        <div class="login-divider">
+          <span>or</span>
+        </div>
+
+        <button class="login-btn totp-btn" id="totpSignupBtn">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          Sign Up with Authenticator
+        </button>
+      </div>
+
+      <p class="login-footer">No email needed, just your authenticator app</p>
+    </div>
+  </div>
+
+  <!-- Authenticator Signup Modal -->
+  <div class="modal-backdrop" id="totpModal">
+    <div class="modal-content totp-modal">
+      <div class="modal-header">
+        <h2>Sign Up with Authenticator</h2>
+        <button class="modal-close" id="closeTotpModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="step-indicator" id="totpStepIndicator">Step 1 of 2: Scan QR Code</p>
+
+        <!-- Step 1: Setup -->
+        <div id="totpSetupStep">
+          <p>Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, Authy, etc.)</p>
+          <div class="qr-code-container">
+            <img id="qrCodeImage" src="" alt="QR Code" class="qr-code">
+          </div>
+          <p class="backup-secret">Can't scan? Enter this code manually:</p>
+          <div class="secret-code" id="secretCode"></div>
+          <button class="modal-btn primary" id="totpSetupNextBtn">Next</button>
+        </div>
+
+        <!-- Step 2: Verify -->
+        <div id="totpVerifyStep" style="display: none;">
+          <p>Enter the 6-digit code from your authenticator app to confirm</p>
+          <div class="totp-code-input">
+            <input type="text" maxlength="1" class="totp-digit" data-index="0">
+            <input type="text" maxlength="1" class="totp-digit" data-index="1">
+            <input type="text" maxlength="1" class="totp-digit" data-index="2">
+            <input type="text" maxlength="1" class="totp-digit" data-index="3">
+            <input type="text" maxlength="1" class="totp-digit" data-index="4">
+            <input type="text" maxlength="1" class="totp-digit" data-index="5">
+          </div>
+          <button class="modal-btn primary" id="verifyTotpBtn">Verify & Sign Up</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Container -->
+  <div class="app-container">
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title">Messages</div>
+        <button class="new-chat-btn" id="newChatBtn" title="New chat">+</button>
+      </div>
+      <div class="chat-list" id="chatList"></div>
+    </div>
+
+    <!-- Sidebar Backdrop (mobile) -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <!-- Main Chat Container -->
+    <div class="imessage-container">
+      <!-- iMessage Header -->
+      <div class="imessage-header">
+        <div class="header-left">
+          <button class="menu-btn" id="menuBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="header-center" id="headerCenter" style="cursor: pointer;">
+          <div class="contact-avatar">
+            <img id="avatarImg" src="https://tr.rbxcdn.com/30DAY-AvatarHeadshot-04A23E6FB0A318E4CBE1BFC3AD59A911-Png/150/150/AvatarHeadshot/Png/noFilter" alt="Bot">
+          </div>
+          <span class="contact-name" id="contactName">Chat Bots</span>
+        </div>
+        <div class="header-right">
+          <button class="search-icon-btn" id="searchBtn" title="Search messages">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Search Bar -->
+      <div class="search-bar" id="searchBar">
+        <input type="text" class="search-input" id="searchInput" placeholder="Search messages..." />
+        <div class="search-controls">
+          <span class="search-counter" id="searchCounter"></span>
+          <button class="search-nav-btn" id="searchPrev" title="Previous">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          <button class="search-nav-btn" id="searchNext" title="Next">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+        </div>
+        <button class="search-close" id="searchClose">Cancel</button>
+      </div>
+
+      <!-- Chat Area -->
+      <div class="chat-area" id="chatArea"></div>
+
+      <!-- Scroll to Bottom Button -->
+      <button class="scroll-to-bottom" id="scrollToBottomBtn" title="Scroll to bottom">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+
+      <!-- Reply Preview -->
+      <div class="reply-preview" id="replyPreview">
+        <div class="reply-preview-label">Replying to Bot</div>
+        <div class="reply-preview-text" id="replyPreviewText"></div>
+        <button class="reply-preview-close" id="replyPreviewClose">×</button>
+      </div>
+
+      <!-- Input Area -->
+      <div class="input-area">
+        <div class="input-field-container">
+          <textarea id="chatInput" class="input-field" placeholder="message" rows="1" maxlength="300"></textarea>
+          <span class="char-counter" id="charCounter"></span>
+          <button class="send-button" id="sendBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="19" x2="12" y2="5"></line>
+              <polyline points="5 12 12 5 19 12"></polyline>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contact Card Modal -->
+  <div class="contact-modal-backdrop" id="contactModal">
+    <div class="contact-modal">
+      <div class="contact-modal-header">
+        <button class="contact-modal-close-icon" id="contactModalInfoClose">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="contact-modal-avatar" id="modalAvatar">
+        <img src="https://tr.rbxcdn.com/30DAY-AvatarHeadshot-04A23E6FB0A318E4CBE1BFC3AD59A911-Png/150/150/AvatarHeadshot/Png/noFilter" alt="Bot">
+      </div>
+      <div class="contact-modal-name" id="modalName">Bot</div>
+      <div class="contact-modal-status">● Online</div>
+      <div class="contact-modal-info">
+        <div class="contact-info-row">
+          <span class="contact-info-label">Username</span>
+          <span class="contact-info-value" id="modalUsername">@bot</span>
+        </div>
+        <div class="contact-info-row">
+          <span class="contact-info-label">Platform</span>
+          <span class="contact-info-value" id="modalPlatform">Roblox</span>
+        </div>
+        <div class="contact-info-row">
+          <span class="contact-info-label">Status</span>
+          <span class="contact-info-value" id="modalStatus">Available</span>
+        </div>
+        <div class="contact-info-row">
+          <span class="contact-info-label">Bio</span>
+          <span class="contact-info-value" id="modalBio">just vibin</span>
+        </div>
+      </div>
+      <div class="theme-picker">
+        <button class="theme-btn active" data-theme="light" title="Light"></button>
+        <button class="theme-btn" data-theme="dark" title="Dark"></button>
+        <button class="theme-btn" data-theme="glass" title="Liquid Glass"></button>
+        <button class="theme-btn" data-theme="gradient" title="Gradient"></button>
+        <button class="theme-btn" data-theme="midnight" title="Midnight"></button>
+        <button class="theme-btn" data-theme="sunset" title="Sunset"></button>
+        <button class="theme-btn theme-btn-custom" id="openThemeMaker" title="Create Custom">+</button>
+      </div>
+      <div class="contact-modal-actions">
+        <button class="contact-modal-btn secondary" id="closeContactModal">Close</button>
+        <button class="contact-modal-btn primary" id="messageContact">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" style="vertical-align: middle; margin-right: 6px;">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          Message
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Theme Maker Modal -->
+  <div class="theme-maker-backdrop" id="themeMakerModal">
+    <div class="theme-maker-modal">
+      <div class="theme-maker-header">
+        <h2>Theme Studio</h2>
+        <button class="theme-maker-close" id="closeThemeMaker">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="theme-maker-content">
+        <!-- Base Style Selection -->
+        <div class="theme-section">
+          <label class="theme-section-label">Base Style</label>
+          <div class="theme-style-grid">
+            <button class="style-btn active" data-style="solid" title="Solid Colors">
+              <span class="style-preview solid-preview"></span>
+              <span>Solid</span>
+            </button>
+            <button class="style-btn" data-style="glass" title="Liquid Glass Effect">
+              <span class="style-preview glass-preview"></span>
+              <span>Glass</span>
+            </button>
+            <button class="style-btn" data-style="gradient" title="Gradient Background">
+              <span class="style-preview gradient-preview"></span>
+              <span>Gradient</span>
+            </button>
+            <button class="style-btn" data-style="neon" title="Neon Glow">
+              <span class="style-preview neon-preview"></span>
+              <span>Neon</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Color Scheme -->
+        <div class="theme-section">
+          <label class="theme-section-label">Color Scheme</label>
+          <div class="color-scheme-grid">
+            <button class="color-btn" data-color="blue" style="--btn-color: #007AFF" title="Ocean Blue"></button>
+            <button class="color-btn" data-color="purple" style="--btn-color: #AF52DE" title="Purple"></button>
+            <button class="color-btn" data-color="pink" style="--btn-color: #FF2D92" title="Hot Pink"></button>
+            <button class="color-btn" data-color="red" style="--btn-color: #FF3B30" title="Red"></button>
+            <button class="color-btn" data-color="orange" style="--btn-color: #FF9500" title="Orange"></button>
+            <button class="color-btn" data-color="yellow" style="--btn-color: #FFCC00" title="Yellow"></button>
+            <button class="color-btn" data-color="green" style="--btn-color: #34C759" title="Green"></button>
+            <button class="color-btn" data-color="teal" style="--btn-color: #5AC8FA" title="Teal"></button>
+            <button class="color-btn" data-color="cyan" style="--btn-color: #00CED1" title="Cyan"></button>
+            <button class="color-btn" data-color="mint" style="--btn-color: #00C7BE" title="Mint"></button>
+            <button class="color-btn" data-color="indigo" style="--btn-color: #5856D6" title="Indigo"></button>
+            <button class="color-btn" data-color="violet" style="--btn-color: #8B5CF6" title="Violet"></button>
+            <button class="color-btn" data-color="rose" style="--btn-color: #EC4899" title="Rose"></button>
+            <button class="color-btn" data-color="coral" style="--btn-color: #FF7F50" title="Coral"></button>
+            <button class="color-btn" data-color="gold" style="--btn-color: #FFD700" title="Gold"></button>
+            <button class="color-btn" data-color="lime" style="--btn-color: #84CC16" title="Lime"></button>
+          </div>
+          <div class="custom-color-row">
+            <label>Custom:</label>
+            <input type="color" id="customAccentColor" value="#007AFF">
+          </div>
+        </div>
+
+        <!-- Background Darkness -->
+        <div class="theme-section">
+          <label class="theme-section-label">Background</label>
+          <div class="bg-mode-grid">
+            <button class="bg-btn" data-bg="light" title="Light Mode">
+              <span class="bg-preview light-bg"></span>
+              <span>Light</span>
+            </button>
+            <button class="bg-btn active" data-bg="dark" title="Dark Mode">
+              <span class="bg-preview dark-bg"></span>
+              <span>Dark</span>
+            </button>
+            <button class="bg-btn" data-bg="amoled" title="Pure Black">
+              <span class="bg-preview amoled-bg"></span>
+              <span>AMOLED</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Glass Intensity (only for glass style) -->
+        <div class="theme-section glass-options" style="display: none;">
+          <label class="theme-section-label">Glass Intensity</label>
+          <div class="slider-container">
+            <input type="range" id="glassIntensity" min="20" max="100" value="60" class="theme-slider">
+            <span class="slider-value" id="glassIntensityValue">60%</span>
+          </div>
+        </div>
+
+        <!-- Blur Amount -->
+        <div class="theme-section glass-options" style="display: none;">
+          <label class="theme-section-label">Blur Amount</label>
+          <div class="slider-container">
+            <input type="range" id="blurAmount" min="10" max="100" value="50" class="theme-slider">
+            <span class="slider-value" id="blurAmountValue">50px</span>
+          </div>
+        </div>
+
+        <!-- Bubble Style -->
+        <div class="theme-section">
+          <label class="theme-section-label">Bubble Style</label>
+          <div class="bubble-style-grid">
+            <button class="bubble-btn active" data-bubble="rounded" title="Rounded">
+              <span class="bubble-preview rounded-bubble"></span>
+            </button>
+            <button class="bubble-btn" data-bubble="pill" title="Pill Shape">
+              <span class="bubble-preview pill-bubble"></span>
+            </button>
+            <button class="bubble-btn" data-bubble="square" title="Square">
+              <span class="bubble-preview square-bubble"></span>
+            </button>
+            <button class="bubble-btn" data-bubble="cloud" title="Cloud">
+              <span class="bubble-preview cloud-bubble"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Gradient Direction (for gradient style) -->
+        <div class="theme-section gradient-options" style="display: none;">
+          <label class="theme-section-label">Gradient Direction</label>
+          <div class="gradient-dir-grid">
+            <button class="dir-btn active" data-dir="135" title="Diagonal ↘">↘</button>
+            <button class="dir-btn" data-dir="180" title="Vertical ↓">↓</button>
+            <button class="dir-btn" data-dir="90" title="Horizontal →">→</button>
+            <button class="dir-btn" data-dir="45" title="Diagonal ↗">↗</button>
+            <button class="dir-btn" data-dir="225" title="Diagonal ↙">↙</button>
+            <button class="dir-btn" data-dir="315" title="Diagonal ↖">↖</button>
+          </div>
+        </div>
+
+        <!-- Animations -->
+        <div class="theme-section">
+          <label class="theme-section-label">Animations</label>
+          <div class="toggle-grid">
+            <label class="toggle-item">
+              <input type="checkbox" id="animOrbs" checked>
+              <span class="toggle-label">Floating Orbs</span>
+            </label>
+            <label class="toggle-item">
+              <input type="checkbox" id="animGradient">
+              <span class="toggle-label">Moving Gradient</span>
+            </label>
+            <label class="toggle-item">
+              <input type="checkbox" id="animGlow">
+              <span class="toggle-label">Bubble Glow</span>
+            </label>
+            <label class="toggle-item">
+              <input type="checkbox" id="animPulse">
+              <span class="toggle-label">Typing Pulse</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Presets -->
+        <div class="theme-section">
+          <label class="theme-section-label">Quick Presets</label>
+          <div class="preset-grid">
+            <button class="preset-btn" data-preset="ocean">🌊 Ocean</button>
+            <button class="preset-btn" data-preset="forest">🌲 Forest</button>
+            <button class="preset-btn" data-preset="sunset">🌅 Sunset</button>
+            <button class="preset-btn" data-preset="midnight">🌙 Midnight</button>
+            <button class="preset-btn" data-preset="cotton-candy">🍭 Cotton Candy</button>
+            <button class="preset-btn" data-preset="aurora">🌌 Aurora</button>
+            <button class="preset-btn" data-preset="fire">🔥 Fire</button>
+            <button class="preset-btn" data-preset="ice">❄️ Ice</button>
+            <button class="preset-btn" data-preset="lavender">💜 Lavender</button>
+            <button class="preset-btn" data-preset="gold-rush">✨ Gold Rush</button>
+            <button class="preset-btn" data-preset="neon-city">🏙️ Neon City</button>
+            <button class="preset-btn" data-preset="cherry">🌸 Cherry</button>
+          </div>
+        </div>
+
+        <!-- Live Preview -->
+        <div class="theme-section">
+          <label class="theme-section-label">Preview</label>
+          <div class="theme-preview-box" id="themePreviewBox">
+            <div class="preview-header">Bot</div>
+            <div class="preview-chat">
+              <div class="preview-bubble received">hey whats up</div>
+              <div class="preview-bubble sent">not much just vibin</div>
+              <div class="preview-bubble received">nice nice</div>
+            </div>
+            <div class="preview-input">message</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="theme-maker-footer">
+        <button class="theme-maker-btn secondary" id="resetTheme">Reset</button>
+        <button class="theme-maker-btn primary" id="applyTheme">Apply Theme</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Bot Modal -->
+  <div class="modal-backdrop" id="addBotModal">
+    <div class="modal-content add-bot-modal">
+      <div class="modal-header">
+        <h2>Add a Bot</h2>
+        <button class="modal-close" id="closeAddBotModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="add-bot-section">
+          <label>Enter 4-digit code</label>
+          <div class="share-code-input">
+            <input type="text" maxlength="1" class="code-digit" data-index="0">
+            <input type="text" maxlength="1" class="code-digit" data-index="1">
+            <input type="text" maxlength="1" class="code-digit" data-index="2">
+            <input type="text" maxlength="1" class="code-digit" data-index="3">
+          </div>
+          <button class="modal-btn primary" id="addBotByCodeBtn">Add Bot</button>
+        </div>
+
+        <div class="modal-divider">
+          <span>or</span>
+        </div>
+
+        <div class="add-bot-section">
+          <button class="modal-btn secondary create-bot-btn" id="openCreateBotBtn">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Create Your Own Bot
+          </button>
+          <p class="add-bot-hint">Use any Roblox user as the bot's identity</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bot Creation Wizard -->
+  <div class="modal-backdrop" id="createBotModal">
+    <div class="modal-content create-bot-modal">
+      <!-- Step 1: Roblox User -->
+      <div class="wizard-step" id="wizardStep1">
+        <div class="modal-header">
+          <h2>Create Bot - Step 1</h2>
+          <button class="modal-close" id="closeCreateBotModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <label>Enter Roblox User ID or Username</label>
+          <div class="roblox-search">
+            <input type="text" id="robloxInput" class="modal-input" placeholder="e.g. 123456789 or builderman">
+            <button class="search-btn" id="searchRobloxBtn">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </button>
+          </div>
+
+          <div class="roblox-preview" id="robloxPreview" style="display: none;">
+            <img class="roblox-avatar" id="robloxAvatar" src="" alt="Avatar">
+            <div class="roblox-info">
+              <div class="roblox-username" id="robloxUsername"></div>
+              <div class="roblox-id" id="robloxId"></div>
+            </div>
+            <div class="roblox-found">Found!</div>
+          </div>
+
+          <div class="roblox-error" id="robloxError" style="display: none;">
+            User not found. Check the ID or username.
+          </div>
+
+          <button class="modal-btn primary" id="wizardNext1" disabled>Next</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Description -->
+      <div class="wizard-step" id="wizardStep2" style="display: none;">
+        <div class="modal-header">
+          <button class="wizard-back" id="wizardBack2">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          <h2>Create Bot - Step 2</h2>
+          <button class="modal-close" id="closeCreateBotModal2">&times;</button>
+        </div>
+        <div class="modal-body">
+          <label>Describe this bot's personality</label>
+          <textarea id="botDescription" class="modal-textarea" placeholder="Example: A chill gamer who loves building obstacle courses and friendly trash talking. Uses lots of slang and abbreviations."></textarea>
+          <p class="description-hint">Be specific about how the bot should talk, their interests, and personality traits.</p>
+
+          <button class="modal-btn primary" id="wizardNext2">
+            <span class="btn-text">Generate Prompt</span>
+            <span class="btn-loading" style="display: none;">Generating...</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 3: Complete -->
+      <div class="wizard-step" id="wizardStep3" style="display: none;">
+        <div class="modal-header">
+          <h2>Your Bot is Ready!</h2>
+          <button class="modal-close" id="closeCreateBotModal3">&times;</button>
+        </div>
+        <div class="modal-body wizard-complete">
+          <div class="bot-preview">
+            <img class="bot-avatar" id="botAvatar" src="" alt="Bot Avatar">
+            <div class="bot-name" id="botName"></div>
+          </div>
+
+          <div class="share-info">
+            <div class="share-row">
+              <label>Share Code</label>
+              <div class="share-value">
+                <span id="botShareCode">XXXX</span>
+                <button class="copy-btn" id="copyCodeBtn" title="Copy">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="share-row">
+              <label>Share Link</label>
+              <div class="share-value">
+                <span id="botShareLink" class="share-link"></span>
+                <button class="copy-btn" id="copyLinkBtn" title="Copy">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <button class="modal-btn primary start-chat-btn" id="startChatBtn">Start Chatting</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Bots Modal -->
+  <div class="modal-backdrop" id="myBotsModal">
+    <div class="modal-content my-bots-modal">
+      <div class="modal-header">
+        <h2>My Bots</h2>
+        <button class="modal-close" id="closeMyBotsModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="my-bots-list" id="myBotsList">
+          <!-- Bots will be loaded here -->
+        </div>
+        <button class="modal-btn secondary" id="createNewBotBtn">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Create New Bot
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Menu (in sidebar) -->
+  <template id="userMenuTemplate">
+    <div class="user-menu">
+      <div class="user-info">
+        <img class="user-avatar" id="userAvatar" src="" alt="Avatar">
+        <span class="user-name" id="userName"></span>
+      </div>
+      <div class="user-actions">
+        <button class="user-action-btn" id="myBotsBtn" title="My Bots">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="8" r="5"></circle>
+            <path d="M3 21v-2a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v2"></path>
+          </svg>
+        </button>
+        <button class="user-action-btn" id="logoutBtn" title="Sign Out">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </template>
+
+  <script src="config.js"></script>
+  <script src="supabase.js"></script>
+  <script src="app.js?v=8"></script>
+</body>
+</html>
