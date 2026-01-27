@@ -1,4 +1,4 @@
-// Chat Bots Configuration
+// Spunnie Configuration
 // Update these values for your deployment
 
 const CONFIG = {
@@ -10,8 +10,8 @@ const CONFIG = {
   API_URL: 'http://localhost:3000/api', // Change to your API URL
 
   // App info
-  APP_NAME: 'Chat Bots',
-  APP_URL: 'http://localhost:5500', // Change to your frontend URL
+  APP_NAME: 'Spunnie',
+  APP_URL: 'http://localhost:5500', // Change to your frontend URL (e.g., https://spunnie.com)
 
   // Support bot
   SUPPORT_BOT_CODE: 'HELP'

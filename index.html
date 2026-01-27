@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="icon" type="image/png" id="favicon" href="https://tr.rbxcdn.com/30DAY-AvatarHeadshot-694A8E7E5BEEA03F431BD7D696694A14-Png/150/150/AvatarHeadshot/Png/noFilter" />
-  <link rel="stylesheet" href="styles.css?v=9" />
+  <link rel="stylesheet" href="styles.css?v=8" />
 </head>
 <body>
   <!-- Animated Gradient Background -->
@@ -124,16 +124,6 @@
             <div class="marketplace-search">
               <input type="text" id="marketplaceSearch" placeholder="Search bots..." class="marketplace-search-input">
             </div>
-            <div class="marketplace-controls">
-              <div class="marketplace-sort" id="marketplaceSort">
-                <button class="marketplace-sort-btn active" data-sort="popular" id="marketplaceSortPopular">Popular</button>
-                <button class="marketplace-sort-btn" data-sort="new" id="marketplaceSortNew">New</button>
-              </div>
-              <button class="marketplace-random-btn" id="marketplaceRandomBtn" title="Random bot">Random</button>
-            </div>
-          </div>
-          <div class="marketplace-featured" id="marketplaceFeatured" style="display: none;">
-            <!-- Featured bots -->
           </div>
           <div class="marketplace-grid" id="marketplaceGrid">
             <!-- Bots will be loaded here -->
@@ -282,64 +272,78 @@
           </svg>
         </button>
       </div>
-      <div class="contact-modal-avatar" id="modalAvatar">
-        <img src="https://tr.rbxcdn.com/30DAY-AvatarHeadshot-04A23E6FB0A318E4CBE1BFC3AD59A911-Png/150/150/AvatarHeadshot/Png/noFilter" alt="Bot">
+      <div class="contact-modal-avatar-wrapper">
+        <div class="contact-modal-avatar" id="modalAvatar">
+          <img src="https://tr.rbxcdn.com/30DAY-AvatarHeadshot-04A23E6FB0A318E4CBE1BFC3AD59A911-Png/150/150/AvatarHeadshot/Png/noFilter" alt="Bot">
+        </div>
       </div>
       <div class="contact-modal-name" id="modalName">Bot</div>
-      <div class="contact-modal-status">● Online</div>
-      <div class="contact-modal-info">
-        <div class="contact-info-row">
-          <span class="contact-info-label">Username</span>
-          <span class="contact-info-value" id="modalUsername">@bot</span>
-        </div>
-        <div class="contact-info-row">
-          <span class="contact-info-label">Platform</span>
-          <span class="contact-info-value" id="modalPlatform">Roblox</span>
-        </div>
-        <div class="contact-info-row">
-          <span class="contact-info-label">Status</span>
-          <span class="contact-info-value" id="modalStatus">Available</span>
-        </div>
-        <div class="contact-info-row">
-          <span class="contact-info-label">Bio</span>
-          <span class="contact-info-value" id="modalBio">just vibin</span>
-        </div>
+      <div class="contact-modal-username" id="modalUsername">@bot</div>
+      <div class="contact-modal-status">
+        <span class="status-dot"></span>
+        <span>Always available</span>
       </div>
-      <div class="theme-picker">
-        <button class="theme-btn active" data-theme="light" title="Light"></button>
-        <button class="theme-btn" data-theme="dark" title="Dark"></button>
-        <button class="theme-btn" data-theme="glass" title="Liquid Glass"></button>
-        <button class="theme-btn" data-theme="gradient" title="Gradient"></button>
-        <button class="theme-btn" data-theme="midnight" title="Midnight"></button>
-        <button class="theme-btn" data-theme="sunset" title="Sunset"></button>
-        <button class="theme-btn theme-btn-custom" id="openThemeMaker" title="Create Custom">+</button>
+      <div class="contact-modal-info">
+        <div class="contact-info-section">
+          <div class="contact-info-section-title">About</div>
+          <div class="contact-info-row">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <div class="contact-info-content">
+              <span class="contact-info-label">Roblox Username</span>
+              <span class="contact-info-value" id="modalRobloxUsername">unknown</span>
+            </div>
+          </div>
+          <div class="contact-info-row">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <div class="contact-info-content">
+              <span class="contact-info-label">Share Code</span>
+              <span class="contact-info-value contact-info-code" id="modalShareCode">XXXX</span>
+            </div>
+          </div>
+          <div class="contact-info-row">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+            <div class="contact-info-content">
+              <span class="contact-info-label">Description</span>
+              <span class="contact-info-value" id="modalBio">just vibin</span>
+            </div>
+          </div>
+        </div>
+        <div class="contact-info-section">
+          <div class="contact-info-section-title">Appearance</div>
+          <div class="theme-picker">
+            <button class="theme-btn active" data-theme="light" title="Light"></button>
+            <button class="theme-btn" data-theme="dark" title="Dark"></button>
+            <button class="theme-btn" data-theme="glass" title="Liquid Glass"></button>
+            <button class="theme-btn" data-theme="gradient" title="Gradient"></button>
+            <button class="theme-btn" data-theme="midnight" title="Midnight"></button>
+            <button class="theme-btn" data-theme="sunset" title="Sunset"></button>
+            <button class="theme-btn theme-btn-custom" id="openThemeMaker" title="Create Custom">+</button>
+          </div>
+        </div>
       </div>
       <div class="contact-modal-actions">
-        <button class="contact-modal-btn secondary" id="closeContactModal">Close</button>
+        <button class="contact-modal-btn secondary" id="closeContactModal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+          Close
+        </button>
         <button class="contact-modal-btn primary" id="messageContact">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="vertical-align: middle; margin-right: 6px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
           </svg>
           Message
         </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- In-app Dialog Modal (replaces confirm/prompt) -->
-  <div class="modal-backdrop" id="dialogModal">
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3 id="dialogTitle">Confirm</h3>
-        <button class="modal-close" id="dialogClose">×</button>
-      </div>
-      <div class="modal-content">
-        <div class="dialog-message" id="dialogMessage"></div>
-        <input type="text" id="dialogInput" class="form-input" style="display:none" />
-      </div>
-      <div class="modal-footer">
-        <button class="modal-btn secondary" id="dialogCancelBtn">Cancel</button>
-        <button class="modal-btn primary" id="dialogOkBtn">OK</button>
       </div>
     </div>
   </div>
@@ -655,6 +659,7 @@
           <label>Describe this bot's personality</label>
           <textarea id="botDescription" class="modal-textarea" placeholder="Example: A chill gamer who loves building obstacle courses and friendly trash talking. Uses lots of slang and abbreviations."></textarea>
           <p class="description-hint">Be specific about how the bot should talk, their interests, and personality traits.</p>
+
           <label class="modal-checkbox">
             <input type="checkbox" id="botIsPublic">
             <span>List in Marketplace (if approved)</span>
@@ -742,15 +747,19 @@
         <button class="modal-close" id="closeBotSettingsModal">&times;</button>
       </div>
       <div class="modal-body">
-        <div class="bot-settings-status" id="botSettingsStatus">Status: Approved</div>
+        <div class="bot-settings-status" id="botSettingsStatus">Status: Pending</div>
+
         <label for="botSettingsName">Name</label>
         <input type="text" id="botSettingsName" class="modal-input" maxlength="60" placeholder="Bot name">
+
         <label class="modal-checkbox">
           <input type="checkbox" id="botSettingsPublic">
           <span>Public in Marketplace</span>
         </label>
+
         <label for="botSettingsDescription">Description</label>
         <textarea id="botSettingsDescription" class="modal-textarea" rows="3" placeholder="Describe your bot"></textarea>
+
         <label for="botSettingsPrompt">System Prompt</label>
         <textarea id="botSettingsPrompt" class="modal-textarea" rows="8" placeholder="System prompt"></textarea>
       </div>
@@ -786,8 +795,8 @@
     </div>
   </template>
 
-  <script src="config.js?v=2"></script>
+  <script src="config.js"></script>
   <script src="supabase.js"></script>
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

@@ -1,8 +1,5 @@
 # Static asset headers for Cloudflare Pages
 
-/config.js
-  Cache-Control: no-cache, no-store, must-revalidate
-
 /*.js
   Content-Type: application/javascript; charset=utf-8
 

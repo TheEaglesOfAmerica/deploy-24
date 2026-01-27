@@ -74,103 +74,6 @@ let isAuthenticated = false;
 let currentUser = null;
 let useSupabase = false; // Flag to switch between localStorage and Supabase
 let botSettingsBot = null;
-const PENDING_SHARE_CODE_KEY = 'spunnie_pending_share_code';
-const HAS_SUPABASE_CONFIG = typeof CONFIG !== 'undefined' && !!CONFIG.SUPABASE_URL;
-
-function showToast(message, type = 'info', timeoutMs = 2500) {
-  try {
-    let container = document.getElementById('toastContainer');
-    if (!container) {
-      container = document.createElement('div');
-      container.id = 'toastContainer';
-      container.className = 'toast-container';
-      document.body.appendChild(container);
-    }
-
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    container.appendChild(toast);
-
-    // Animate in
-    requestAnimationFrame(() => toast.classList.add('visible'));
-
-    setTimeout(() => {
-      toast.classList.remove('visible');
-      setTimeout(() => toast.remove(), 250);
-    }, timeoutMs);
-  } catch (e) {
-    // Last-resort fallback (should be rare)
-    console.log('Toast:', type, message);
-  }
-}
-
-function getShareCodeFromUrl() {
-  try {
-    const pathMatch = window.location.pathname.match(/^\/b\/([A-Za-z0-9]{4})$/);
-    const qs = new URLSearchParams(window.location.search);
-    const fromQuery = qs.get('b');
-    const code = (fromQuery || pathMatch?.[1] || '').toString().trim();
-    if (!code) return null;
-    const normalized = code.replace(/[^a-z0-9]/gi, '').toUpperCase();
-    if (!/^[A-Z0-9]{4}$/.test(normalized)) return null;
-    return normalized;
-  } catch {
-    return null;
-  }
-}
-
-function stashShareCode(code) {
-  if (!code) return;
-  try { localStorage.setItem(PENDING_SHARE_CODE_KEY, code); } catch {}
-}
-
-function consumeStashedShareCode() {
-  try {
-    const code = localStorage.getItem(PENDING_SHARE_CODE_KEY);
-    if (code) localStorage.removeItem(PENDING_SHARE_CODE_KEY);
-    return code;
-  } catch {
-    return null;
-  }
-}
-
-async function tryOpenShareCode(code) {
-  if (!code) return;
-
-  // Clean URL so refresh doesn't re-trigger
-  try {
-    if (window.location.search.includes('b=')) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('b');
-      window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-    }
-    if (window.location.pathname.startsWith('/b/')) {
-      window.history.replaceState({}, '', '/');
-    }
-  } catch {}
-
-  stashShareCode(code);
-
-  if (!useSupabase || !window.essx?.isLoggedIn?.()) {
-    showLoginScreen();
-    return;
-  }
-
-  const pending = consumeStashedShareCode();
-  if (!pending) return;
-
-  try {
-    const bot = await window.essx.getBotByCode(pending);
-    if (bot?.id) {
-      await addBotFromMarketplace(bot.id);
-      showToast(`Added bot ${pending}`, 'success');
-    }
-  } catch (err) {
-    console.error('Failed to open share code:', err);
-    showToast('Invalid or unavailable bot code', 'error');
-  }
-}
 
 // Initialize Supabase client
 async function initSupabase() {
@@ -181,12 +84,6 @@ async function initSupabase() {
     }
 
     await window.essx.init();
-
-    // Capture share links early (works even if already logged in)
-    const incomingShareCode = getShareCodeFromUrl();
-    if (incomingShareCode) {
-      stashShareCode(incomingShareCode);
-    }
 
     // Set up auth change listener
     window.essx.onAuthChange = (event, session) => {
@@ -238,9 +135,6 @@ async function handleAuthSuccess(user) {
 
   // Setup user menu in sidebar
   setupUserMenu();
-
-  // If user arrived via share link, open it now
-  await tryOpenShareCode(consumeStashedShareCode());
 
   // Show moderate tab if user is admin
   const moderateTab = document.getElementById('moderateTab');
@@ -316,6 +210,8 @@ async function loadChatsFromSupabase() {
         name: bot?.roblox_username || bot?.name || 'Unknown',
         avatarUrl: bot?.roblox_avatar_url,
         shareCode: bot?.share_code,
+        robloxUsername: bot?.roblox_username,
+        description: bot?.description,
         messages: chat.messages || [],
         conversation: chat.conversation || [],
         notes: chat.notes || [],
@@ -368,6 +264,8 @@ async function ensureSupportChat() {
         name: 'Support',
         avatarUrl: null,
         shareCode: 'HELP',
+        robloxUsername: 'SpunnieHelp',
+        description: 'Official Spunnie support bot. Ask me anything about using the app!',
         messages: [],
         conversation: [],
         notes: [],
@@ -396,99 +294,6 @@ function closeModal(modal) {
   }
 }
 
-// In-app dialog (replaces confirm/prompt)
-const dialogModal = document.getElementById('dialogModal');
-const dialogTitleEl = document.getElementById('dialogTitle');
-const dialogMessageEl = document.getElementById('dialogMessage');
-const dialogInputEl = document.getElementById('dialogInput');
-const dialogOkBtn = document.getElementById('dialogOkBtn');
-const dialogCancelBtn = document.getElementById('dialogCancelBtn');
-const dialogCloseBtn = document.getElementById('dialogClose');
-
-let dialogResolve = null;
-
-function closeDialog(result) {
-  if (dialogResolve) {
-    dialogResolve(result);
-    dialogResolve = null;
-  }
-  closeModal(dialogModal);
-}
-
-function ensureDialogBound() {
-  if (!dialogModal || dialogModal.dataset.bound) return;
-  dialogModal.dataset.bound = '1';
-
-  dialogOkBtn?.addEventListener('click', () => {
-    const value = dialogInputEl?.style.display === 'none' ? null : (dialogInputEl?.value || '');
-    closeDialog({ ok: true, value });
-  });
-
-  const cancel = () => closeDialog({ ok: false, value: null });
-  dialogCancelBtn?.addEventListener('click', cancel);
-  dialogCloseBtn?.addEventListener('click', cancel);
-
-  dialogModal.addEventListener('click', (e) => {
-    if (e.target === dialogModal) cancel();
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (!dialogModal?.classList.contains('visible')) return;
-    if (e.key === 'Escape') cancel();
-    if (e.key === 'Enter' && dialogInputEl?.style.display !== 'none') {
-      e.preventDefault();
-      const value = dialogInputEl?.value || '';
-      closeDialog({ ok: true, value });
-    }
-  });
-}
-
-function openDialog({
-  title,
-  message,
-  okText = 'OK',
-  cancelText = 'Cancel',
-  showCancel = true,
-  input = false,
-  inputPlaceholder = '',
-  inputValue = '',
-  inputMaxLength = 160
-} = {}) {
-  ensureDialogBound();
-
-  if (!dialogModal) {
-    // Fallback: keep app usable even if modal missing
-    return Promise.resolve({ ok: true, value: input ? inputValue : null });
-  }
-
-  if (dialogTitleEl) dialogTitleEl.textContent = title || 'Confirm';
-  if (dialogMessageEl) dialogMessageEl.textContent = message || '';
-  if (dialogOkBtn) dialogOkBtn.textContent = okText;
-  if (dialogCancelBtn) {
-    dialogCancelBtn.textContent = cancelText;
-    dialogCancelBtn.style.display = showCancel ? '' : 'none';
-  }
-
-  if (dialogInputEl) {
-    dialogInputEl.style.display = input ? '' : 'none';
-    dialogInputEl.placeholder = inputPlaceholder || '';
-    dialogInputEl.value = inputValue || '';
-    dialogInputEl.maxLength = inputMaxLength;
-  }
-
-  openModal(dialogModal);
-
-  if (dialogInputEl && input) {
-    setTimeout(() => dialogInputEl.focus(), 0);
-  } else {
-    setTimeout(() => dialogOkBtn?.focus(), 0);
-  }
-
-  return new Promise((resolve) => {
-    dialogResolve = resolve;
-  });
-}
-
 // ============================================================
 // TOTP AUTHENTICATOR SIGNUP
 // ============================================================
@@ -502,7 +307,7 @@ async function startTotpSignup() {
   try {
     // TOTP setup requires an authenticated Supabase user (server verifies via Bearer token)
     if (!window.essx?.isLoggedIn?.()) {
-      showToast('Please sign in first (Google), then set up your authenticator.', 'error');
+      alert('Please sign in first (Google), then set up your authenticator.');
       return;
     }
 
@@ -534,13 +339,13 @@ async function startTotpSignup() {
     openModal(totpModal);
   } catch (err) {
     console.error('TOTP signup start failed:', err);
-    showToast('Failed to generate authenticator setup', 'error');
+    alert('Failed to generate authenticator setup');
   }
 }
 
 function showTotpVerifyStep() {
   if (!totpSignupState.secret) {
-    showToast('Please scan the QR code first', 'error');
+    alert('Please scan the QR code first');
     return;
   }
 
@@ -558,13 +363,13 @@ async function completeTotpSignup() {
   const code = Array.from(digits).map(d => d.value).join('');
 
   if (code.length !== 6) {
-    showToast('Please enter 6 digits', 'error');
+    alert('Please enter 6 digits');
     return;
   }
 
   try {
     if (!window.essx?.isLoggedIn?.()) {
-      showToast('Please sign in first (Google).', 'error');
+      alert('Please sign in first (Google).');
       return;
     }
 
@@ -578,11 +383,11 @@ async function completeTotpSignup() {
 
     if (response.success) {
       closeModal(totpModal);
-      showToast('Authenticator enabled successfully.', 'success');
+      alert('Authenticator enabled successfully.');
     }
   } catch (err) {
     console.error('Verification failed:', err);
-    showToast('Invalid code. Try again.', 'error');
+    alert('Invalid code. Try again.');
   }
 }
 
@@ -632,48 +437,41 @@ function setupSidebarTabs() {
           loadModeration();
         }
       }
-
-      // Keep header state in sync with the active tab
-      setHeaderForTab(tabName);
     });
   });
 }
 
 async function loadMyBots() {
-  if (!useSupabase || !myBotsList) return;
+  if (!myBotsList || !currentUser) return;
+
   myBotsList.innerHTML = `
-    <div class="my-bots-empty">
-      <p>Loading bots…</p>
-    </div>
+    <div class="my-bots-empty">Loading your bots...</div>
   `;
+
   try {
     const bots = await window.essx.getMyBots();
-    renderMyBots(bots);
+    renderMyBots(bots || []);
   } catch (err) {
     console.error('Failed to load my bots:', err);
     myBotsList.innerHTML = `
-      <div class="my-bots-empty">
-        <p>Failed to load bots</p>
-      </div>
+      <div class="my-bots-empty">Failed to load bots</div>
     `;
   }
 }
 
 function renderMyBots(bots) {
   if (!myBotsList) return;
+
   if (!bots || bots.length === 0) {
     myBotsList.innerHTML = `
-      <div class="my-bots-empty">
-        <p>No bots yet</p>
-      </div>
+      <div class="my-bots-empty">No bots yet. Create one!</div>
     `;
     return;
   }
 
   myBotsList.innerHTML = bots.map(bot => {
-    const statusClass = bot.moderation_status || (bot.approved ? 'approved' : (bot.rejected ? 'rejected' : 'pending'));
-    const statusLabel = bot.approved ? 'Approved' : (bot.rejected ? 'Rejected' : 'Pending');
-    const statusMessage = bot.moderation_message || (bot.rejected && bot.rejection_reason ? `Rejected — ${bot.rejection_reason}` : (bot.approved ? 'Approved' : 'Pending — queued'));
+    const statusClass = bot.approved ? 'approved' : (bot.rejected ? 'rejected' : 'pending');
+    const statusText = bot.approved ? 'Approved' : (bot.rejected ? 'Rejected' : 'Pending');
 
     return `
       <div class="my-bot-item" data-bot-id="${bot.id}">
@@ -681,168 +479,123 @@ function renderMyBots(bots) {
         <div class="my-bot-info">
           <div class="my-bot-name">${bot.name}</div>
           <div class="my-bot-code">${bot.share_code}</div>
-          <div class="my-bot-status-text ${statusClass}">${statusMessage}</div>
         </div>
-        <div class="my-bot-actions">
-          <span class="profile-bot-status ${statusClass}">${statusLabel}</span>
-        </div>
+        <span class="profile-bot-status ${statusClass}">${statusText}</span>
       </div>
     `;
   }).join('');
 
-  myBotsList.querySelectorAll('.my-bot-item').forEach(item => {
+  myBotsList.querySelectorAll('.my-bot-item').forEach((item) => {
     item.addEventListener('click', async () => {
       const botId = item.dataset.botId;
-      await openBotSettingsById(botId);
+      if (!botId) return;
+
       myBotsList.querySelectorAll('.my-bot-item').forEach(el => el.classList.remove('selected'));
       item.classList.add('selected');
+
+      await openBotSettingsById(botId);
     });
   });
 }
 
 async function loadMarketplace() {
   const marketplaceGrid = document.getElementById('marketplaceGrid');
-  const featuredEl = document.getElementById('marketplaceFeatured');
-  const searchInputEl = document.getElementById('marketplaceSearch');
 
   if (!marketplaceGrid) return;
 
+  // Show loading state
+  marketplaceGrid.innerHTML = `
+    <div class="marketplace-loading">
+      <div class="spinner"></div>
+      <div>Loading bots...</div>
+    </div>
+  `;
+
   try {
-    const query = (searchInputEl?.value || '').trim();
-    const sort = window.__marketplaceSort || 'popular';
-
-    let featured = [];
-    let bots = [];
-
-    if (query) {
-      const response = await window.essx.api(`/marketplace/search?q=${encodeURIComponent(query)}`);
-      bots = response?.bots || [];
-      featured = [];
-    } else {
-      const response = await window.essx.api(`/marketplace?sort=${encodeURIComponent(sort)}`);
-      featured = response?.featured || [];
-      bots = response?.bots || [];
-    }
-
-    window.__marketplaceLastBots = [...featured, ...bots];
-
-    if (featuredEl) {
-      if (featured.length === 0 || query) {
-        featuredEl.style.display = 'none';
-        featuredEl.innerHTML = '';
-      } else {
-        featuredEl.style.display = 'flex';
-        featuredEl.innerHTML = featured.map(bot => `
-          <div class="marketplace-featured-card" onclick="openBotFromMarketplace('${bot.id}')">
-            <div class="marketplace-featured-top">
-              <span class="marketplace-featured-badge">Featured</span>
-              <span class="marketplace-featured-stat">${bot.chat_count || 0} chats</span>
-            </div>
-            <div class="marketplace-featured-body">
-              <img class="marketplace-featured-avatar" src="${bot.roblox_avatar_url || 'https://via.placeholder.com/56'}" alt="${bot.name}">
-              <div style="min-width:0;">
-                <div class="marketplace-featured-name">${bot.name}</div>
-                <div class="marketplace-featured-desc">${bot.description || 'No description'}</div>
-              </div>
-            </div>
-            <div class="marketplace-featured-footer">
-              <div class="marketplace-featured-stat">@${bot.roblox_username || 'unknown'}</div>
-              <button class="marketplace-featured-btn" onclick="event.stopPropagation(); addBotFromMarketplace('${bot.id}')">Add</button>
-            </div>
-          </div>
-        `).join('');
-      }
-    }
+    // Get approved bots from API
+    const response = await window.essx.api('/marketplace');
+    const bots = response.bots || [];
 
     if (bots.length === 0) {
       marketplaceGrid.innerHTML = `
         <div class="marketplace-empty">
-          <div class="marketplace-empty-icon">🏪</div>
-          <div class="marketplace-empty-text">${query ? 'No results' : 'No bots available yet'}</div>
-          <div class="marketplace-empty-subtext">${query ? 'Try a different search.' : 'Be the first to create one!'}</div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+          </svg>
+          <p>No bots available yet</p>
+          <button class="marketplace-create-btn" onclick="document.querySelector('.sidebar-tab[data-tab=\\'profile\\']')?.click()">Create Your Own</button>
         </div>
       `;
       return;
     }
 
-    marketplaceGrid.innerHTML = bots.map(bot => `
-      <div class="marketplace-card" onclick="openBotFromMarketplace('${bot.id}')">
-        <div class="marketplace-card-header">
-          <img class="marketplace-card-avatar" src="${bot.roblox_avatar_url || 'https://via.placeholder.com/48'}" alt="${bot.name}">
-          <div class="marketplace-card-info">
-            <div class="marketplace-card-name">${bot.name}</div>
-            <div class="marketplace-card-username">@${bot.roblox_username}</div>
-          </div>
-        </div>
-        <div class="marketplace-card-description">${bot.description || 'No description'}</div>
-        ${bot.profiles ? `
-          <div class="marketplace-card-creator">
-            Created by <strong>${bot.profiles.display_name || 'Unknown'}</strong>
-          </div>
-        ` : ''}
-        <div class="marketplace-card-footer">
-          <div class="marketplace-card-stats">
-            <div class="marketplace-card-stat">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-              </svg>
-              <span>${bot.chat_count || 0}</span>
+    marketplaceGrid.innerHTML = bots.map(bot => {
+      const creatorInitials = bot.profiles?.display_name
+        ? bot.profiles.display_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+        : '?';
+
+      const creatorAvatarHtml = bot.profiles?.avatar_url
+        ? `<img src="${bot.profiles.avatar_url}" alt="${bot.profiles.display_name || 'Creator'}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+           <div class="marketplace-creator-placeholder" style="display:none;">${creatorInitials}</div>`
+        : `<div class="marketplace-creator-placeholder">${creatorInitials}</div>`;
+
+      return `
+        <div class="marketplace-card" onclick="openBotFromMarketplace('${bot.id}')">
+          <div class="marketplace-card-header">
+            <img
+              class="marketplace-card-avatar"
+              src="${bot.roblox_avatar_url || ''}"
+              alt="${bot.name}"
+              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div class="marketplace-card-avatar-placeholder" style="display:none;">
+              ${bot.name ? bot.name[0].toUpperCase() : '?'}
+            </div>
+            <div class="marketplace-card-info">
+              <div class="marketplace-card-name">${bot.name || 'Unknown Bot'}</div>
+              <div class="marketplace-card-username">@${bot.roblox_username || 'unknown'}</div>
             </div>
           </div>
-          <button class="marketplace-card-btn" onclick="event.stopPropagation(); addBotFromMarketplace('${bot.id}')">Add</button>
+          <div class="marketplace-card-description">${bot.description || 'No description provided.'}</div>
+          ${bot.profiles ? `
+            <div class="marketplace-card-creator">
+              <div class="marketplace-creator-avatar">
+                ${creatorAvatarHtml}
+              </div>
+              <span>by <strong>${bot.profiles.display_name || 'Unknown'}</strong></span>
+            </div>
+          ` : ''}
+          <div class="marketplace-card-footer">
+            <div class="marketplace-card-meta">
+              <div class="marketplace-card-code">${bot.share_code}</div>
+              <div class="marketplace-card-separator">•</div>
+              <div class="marketplace-card-chats">${bot.chat_count || 0} chats</div>
+            </div>
+            <button class="marketplace-card-btn" onclick="event.stopPropagation(); addBotFromMarketplace('${bot.id}')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add
+            </button>
+          </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   } catch (err) {
     console.error('Failed to load marketplace:', err);
     marketplaceGrid.innerHTML = `
       <div class="marketplace-empty">
-        <div class="marketplace-empty-text">Failed to load marketplace</div>
-        <div class="marketplace-empty-subtext">Try again later</div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <p>Failed to load marketplace</p>
+        <button class="marketplace-retry-btn" onclick="loadMarketplace()">Try Again</button>
       </div>
     `;
   }
-}
-
-function setMarketplaceSort(sort) {
-  window.__marketplaceSort = sort;
-  const popularBtn = document.getElementById('marketplaceSortPopular');
-  const newBtn = document.getElementById('marketplaceSortNew');
-  if (popularBtn) popularBtn.classList.toggle('active', sort === 'popular');
-  if (newBtn) newBtn.classList.toggle('active', sort === 'new');
-}
-
-function setupMarketplaceControls() {
-  const search = document.getElementById('marketplaceSearch');
-  const popularBtn = document.getElementById('marketplaceSortPopular');
-  const newBtn = document.getElementById('marketplaceSortNew');
-  const randomBtn = document.getElementById('marketplaceRandomBtn');
-
-  if (search && !search.dataset.bound) {
-    search.dataset.bound = '1';
-    let t;
-    search.addEventListener('input', () => {
-      clearTimeout(t);
-      t = setTimeout(() => loadMarketplace(), 250);
-    });
-  }
-
-  popularBtn?.addEventListener('click', () => {
-    setMarketplaceSort('popular');
-    loadMarketplace();
-  });
-
-  newBtn?.addEventListener('click', () => {
-    setMarketplaceSort('new');
-    loadMarketplace();
-  });
-
-  randomBtn?.addEventListener('click', () => {
-    const list = window.__marketplaceLastBots || [];
-    if (!list.length) return;
-    const pick = list[Math.floor(Math.random() * list.length)];
-    if (pick?.id) openBotFromMarketplace(pick.id);
-  });
 }
 
 async function addBotFromMarketplace(botId) {
@@ -859,6 +612,8 @@ async function addBotFromMarketplace(botId) {
       name: bot.name || bot.roblox_username,
       avatarUrl: bot.roblox_avatar_url,
       shareCode: bot.share_code,
+      robloxUsername: bot.roblox_username,
+      description: bot.description,
       messages: [],
       conversation: [],
       notes: [],
@@ -879,7 +634,7 @@ async function addBotFromMarketplace(botId) {
     greet();
   } catch (err) {
     console.error('Failed to add bot:', err);
-    showToast('Failed to add bot: ' + err.message, 'error');
+    alert('Failed to add bot: ' + err.message);
   }
 }
 
@@ -890,17 +645,24 @@ async function loadProfile() {
   const statBotsCreated = document.getElementById('statBotsCreated');
   const statTotalChats = document.getElementById('statTotalChats');
 
-  if (!profileName || !currentUser) return;
+  if (!currentUser) return;
 
   // Set profile info
-  profileName.textContent = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'User';
+  if (profileName) {
+    const displayName = currentUser.user_metadata?.full_name ||
+                       currentUser.user_metadata?.name ||
+                       currentUser.email?.split('@')[0] ||
+                       'User';
+    profileName.textContent = displayName;
+  }
 
   if (profileAvatarLarge) {
     const avatarUrl = currentUser.user_metadata?.avatar_url;
     if (avatarUrl) {
-      profileAvatarLarge.innerHTML = `<img src="${avatarUrl}" alt="Avatar">`;
+      profileAvatarLarge.innerHTML = `<img src="${avatarUrl}" alt="Avatar" onerror="this.parentElement.innerHTML='${(currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || 'U')[0].toUpperCase()}'">`;
     } else {
-      profileAvatarLarge.textContent = (currentUser.user_metadata?.full_name || 'U')[0].toUpperCase();
+      const initial = (currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || 'U')[0].toUpperCase();
+      profileAvatarLarge.innerHTML = `<div class="profile-avatar-placeholder">${initial}</div>`;
     }
   }
 
@@ -909,7 +671,10 @@ async function loadProfile() {
     const bots = await window.essx.getMyBots();
 
     // Update stats
-    if (statBotsCreated) statBotsCreated.textContent = bots.length;
+    if (statBotsCreated) {
+      statBotsCreated.textContent = bots.length;
+    }
+
     if (statTotalChats) {
       const totalChats = bots.reduce((sum, bot) => sum + (bot.chat_count || 0), 0);
       statTotalChats.textContent = totalChats;
@@ -920,24 +685,34 @@ async function loadProfile() {
       if (bots.length === 0) {
         profileBotsList.innerHTML = `
           <div class="profile-empty">
+            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" opacity="0.3">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M8 12h8M12 8v8"/>
+            </svg>
             <p>No bots created yet</p>
+            <button class="profile-create-btn" onclick="document.getElementById('openCreateBotBtn')?.click()">Create Your First Bot</button>
           </div>
         `;
       } else {
         profileBotsList.innerHTML = bots.map(bot => {
-          const statusClass = bot.moderation_status || (bot.approved ? 'approved' : (bot.rejected ? 'rejected' : 'pending'));
-          const statusLabel = bot.approved ? 'Approved' : (bot.rejected ? 'Rejected' : 'Pending');
-          const statusMessage = bot.moderation_message || (bot.rejected && bot.rejection_reason ? `Rejected — ${bot.rejection_reason}` : (bot.approved ? 'Approved' : 'Pending — queued'));
+          const statusClass = bot.approved ? 'approved' : (bot.rejected ? 'rejected' : 'pending');
+          const statusText = bot.approved ? '✓ Approved' : (bot.rejected ? '✗ Rejected' : '⏳ Pending');
 
           return `
             <div class="profile-bot-item" onclick="openBotFromProfile('${bot.id}')">
-              <img class="profile-bot-avatar" src="${bot.roblox_avatar_url || 'https://via.placeholder.com/40'}" alt="${bot.name}">
+              <img class="profile-bot-avatar"
+                   src="${bot.roblox_avatar_url || 'https://via.placeholder.com/40?text=' + encodeURIComponent(bot.name[0])}"
+                   alt="${bot.name}"
+                   onerror="this.src='https://via.placeholder.com/40?text=${encodeURIComponent(bot.name[0])}'">
               <div class="profile-bot-info">
                 <div class="profile-bot-name">${bot.name}</div>
-                <div class="profile-bot-code">${bot.share_code}</div>
-                <div class="profile-bot-status-text ${statusClass}">${statusMessage}</div>
+                <div class="profile-bot-meta">
+                  <span class="profile-bot-code">${bot.share_code}</span>
+                  <span class="profile-bot-separator">•</span>
+                  <span class="profile-bot-chats">${bot.chat_count || 0} chats</span>
+                </div>
               </div>
-              <span class="profile-bot-status ${statusClass}">${statusLabel}</span>
+              <span class="profile-bot-status ${statusClass}">${statusText}</span>
             </div>
           `;
         }).join('');
@@ -945,6 +720,14 @@ async function loadProfile() {
     }
   } catch (err) {
     console.error('Failed to load profile:', err);
+    if (profileBotsList) {
+      profileBotsList.innerHTML = `
+        <div class="profile-empty">
+          <p style="color: #FF3B30;">Failed to load bots</p>
+          <button class="profile-create-btn" onclick="loadProfile()">Retry</button>
+        </div>
+      `;
+    }
   }
 }
 
@@ -968,36 +751,44 @@ function openBotFromProfile(botId) {
 }
 
 async function openBotSettingsById(botId) {
+  if (!botId) return;
+
   try {
     const bot = await window.essx.api(`/bots/${botId}`);
     openBotSettings(bot);
   } catch (err) {
     console.error('Failed to open bot settings:', err);
-    showToast('Failed to load bot settings', 'error');
+    alert('Failed to open bot settings: ' + err.message);
   }
 }
 
 function openBotSettings(bot) {
+  if (!botSettingsModal || !bot) return;
+
   botSettingsBot = bot;
-  if (botSettingsTitle) botSettingsTitle.textContent = bot.name || 'Bot Settings';
+
+  if (botSettingsTitle) {
+    botSettingsTitle.textContent = `Bot Settings — ${bot.name || 'Bot'}`;
+  }
+
   if (botSettingsName) botSettingsName.value = bot.name || '';
   if (botSettingsDescription) botSettingsDescription.value = bot.description || '';
   if (botSettingsPrompt) botSettingsPrompt.value = bot.system_prompt || '';
-  if (botSettingsPublic) {
-    botSettingsPublic.checked = !!bot.is_public && bot.approved === true;
-    botSettingsPublic.disabled = bot.approved !== true;
+
+  const statusClass = bot.approved ? 'approved' : (bot.rejected ? 'rejected' : 'pending');
+  let statusText = bot.approved ? 'Approved' : (bot.rejected ? 'Rejected' : 'Pending Review');
+  if (bot.rejected && bot.rejection_reason) {
+    statusText += ` — ${bot.rejection_reason}`;
   }
 
   if (botSettingsStatus) {
-    const statusClass = bot.moderation_status || (bot.approved ? 'approved' : (bot.rejected ? 'rejected' : 'pending'));
-    let statusText = bot.moderation_message || (bot.approved ? 'Approved' : (bot.rejected ? 'Rejected' : 'Pending review'));
-    if (!bot.moderation_message && bot.rejected && bot.rejection_reason) {
-      statusText = `Rejected — ${bot.rejection_reason}`;
-    }
-
-    botSettingsStatus.classList.remove('approved', 'pending', 'rejected');
-    botSettingsStatus.classList.add(statusClass);
+    botSettingsStatus.className = `bot-settings-status ${statusClass}`;
     botSettingsStatus.textContent = `Status: ${statusText}`;
+  }
+
+  if (botSettingsPublic) {
+    botSettingsPublic.checked = !!bot.is_public && bot.approved === true;
+    botSettingsPublic.disabled = bot.approved !== true;
   }
 
   openModal(botSettingsModal);
@@ -1005,38 +796,38 @@ function openBotSettings(bot) {
 
 async function saveBotSettings() {
   if (!botSettingsBot) return;
-  const name = botSettingsName?.value.trim();
+
+  const name = botSettingsName?.value.trim() || '';
   const description = botSettingsDescription?.value.trim() || '';
   const prompt = botSettingsPrompt?.value.trim() || '';
   const wantsPublic = !!botSettingsPublic?.checked;
 
   if (!name) {
-    showToast('Name cannot be empty', 'error');
+    alert('Bot name is required.');
     return;
-  }
-  if (!prompt) {
-    showToast('System prompt cannot be empty', 'error');
-    return;
-  }
-  if (wantsPublic && botSettingsBot.approved !== true) {
-    showToast('This bot must be approved before it can be public.', 'error');
   }
 
-  const updates = {
-    name,
-    description,
-    system_prompt: prompt,
-    is_public: wantsPublic && botSettingsBot.approved === true
-  };
+  if (!prompt) {
+    alert('System prompt is required.');
+    return;
+  }
 
   try {
-    const updated = await window.essx.updateBot(botSettingsBot.id, updates);
-    botSettingsBot = updated;
+    const updated = await window.essx.updateBot(botSettingsBot.id, {
+      name,
+      description,
+      system_prompt: prompt,
+      is_public: wantsPublic && botSettingsBot.approved === true
+    });
+
+    botSettingsBot = { ...botSettingsBot, ...updated };
+
     closeModal(botSettingsModal);
     await Promise.all([loadMyBots(), loadProfile()]);
+    alert('Bot settings saved.');
   } catch (err) {
     console.error('Failed to save bot settings:', err);
-    showToast(err.message || 'Failed to save changes', 'error');
+    alert('Failed to save bot settings: ' + err.message);
   }
 }
 
@@ -1126,13 +917,7 @@ async function loadModeration() {
 }
 
 async function approveBot(botId) {
-  const result = await openDialog({
-    title: 'Approve bot?',
-    message: 'This bot will be visible in the marketplace.',
-    okText: 'Approve',
-    cancelText: 'Cancel'
-  });
-  if (!result.ok) return;
+  if (!confirm('Approve this bot? It will be visible in the marketplace.')) return;
 
   try {
     await window.essx.api(`/moderation/${botId}/approve`, { method: 'POST' });
@@ -1144,25 +929,16 @@ async function approveBot(botId) {
     // Reload moderation to update stats
     loadModeration();
 
-    showToast('Bot approved successfully!', 'success');
+    alert('Bot approved successfully!');
   } catch (err) {
     console.error('Failed to approve bot:', err);
-    showToast('Failed to approve bot: ' + err.message, 'error');
+    alert('Failed to approve bot: ' + err.message);
   }
 }
 
 async function rejectBot(botId) {
-  const result = await openDialog({
-    title: 'Reject bot',
-    message: 'Enter a reason (optional).',
-    okText: 'Reject',
-    cancelText: 'Cancel',
-    input: true,
-    inputPlaceholder: 'Reason (optional)',
-    inputMaxLength: 200
-  });
-  if (!result.ok) return;
-  const reason = (result.value || '').trim();
+  const reason = prompt('Enter rejection reason (optional):');
+  if (reason === null) return; // User cancelled
 
   try {
     await window.essx.api(`/moderation/${botId}/reject`, {
@@ -1177,10 +953,10 @@ async function rejectBot(botId) {
     // Reload moderation to update stats
     loadModeration();
 
-    showToast('Bot rejected successfully!', 'success');
+    alert('Bot rejected successfully!');
   } catch (err) {
     console.error('Failed to reject bot:', err);
-    showToast('Failed to reject bot: ' + err.message, 'error');
+    alert('Failed to reject bot: ' + err.message);
   }
 }
 
@@ -1198,10 +974,10 @@ Bot Details:
 - Created: ${new Date(bot.created_at).toLocaleDateString()}
     `.trim();
 
-    showToast(details, 'info', 6000);
+    alert(details);
   } catch (err) {
     console.error('Failed to view bot details:', err);
-    showToast('Failed to load bot details', 'error');
+    alert('Failed to load bot details');
   }
 }
 
@@ -1289,8 +1065,6 @@ function setButtonLoading(button, isLoading) {
 function setupModals() {
   // Sidebar Tabs Navigation
   setupSidebarTabs();
-  setupMarketplaceControls();
-  setHeaderForTab(document.querySelector('.sidebar-tab.active')?.dataset?.tab || 'chats');
 
   // Login buttons
   googleLoginBtn?.addEventListener('click', async () => {
@@ -1380,12 +1154,27 @@ function setupModals() {
   });
 
   // My bots modal
-  closeMyBotsModal?.addEventListener('click', () => closeModal(myBotsModal));
+  const clearMyBotSelection = () => {
+    myBotsList?.querySelectorAll('.my-bot-item').forEach(el => el.classList.remove('selected'));
+  };
+
+  closeMyBotsModal?.addEventListener('click', () => {
+    closeModal(myBotsModal);
+    clearMyBotSelection();
+  });
   document.getElementById('createNewBotBtn')?.addEventListener('click', () => {
     closeModal(myBotsModal);
+    clearMyBotSelection();
     openModal(createBotModal);
     resetWizard();
   });
+
+  closeBotSettingsModal?.addEventListener('click', () => {
+    closeModal(botSettingsModal);
+    clearMyBotSelection();
+  });
+  botSettingsSaveBtn?.addEventListener('click', saveBotSettings);
+  botSettingsChatBtn?.addEventListener('click', openBotChatFromSettings);
 
   // Edit profile modal
   const profileEditBtn = document.getElementById('profileEditBtn');
@@ -1403,23 +1192,24 @@ function setupModals() {
 
       try {
         const profile = await window.essx.getProfile();
+
         if (editDisplayName) {
           editDisplayName.value =
             profile?.display_name ||
             currentUser.user_metadata?.full_name ||
-            currentUser.email?.split('@')[0] ||
             '';
         }
+
         if (editAvatarUrl) {
-          editAvatarUrl.value = profile?.avatar_url || currentUser.user_metadata?.avatar_url || '';
+          editAvatarUrl.value =
+            profile?.avatar_url ||
+            currentUser.user_metadata?.avatar_url ||
+            '';
         }
       } catch (err) {
-        if (editDisplayName) {
-          editDisplayName.value = currentUser.user_metadata?.full_name || '';
-        }
-        if (editAvatarUrl) {
-          editAvatarUrl.value = currentUser.user_metadata?.avatar_url || '';
-        }
+        console.log('Profile fetch fallback:', err.message);
+        if (editDisplayName) editDisplayName.value = currentUser.user_metadata?.full_name || '';
+        if (editAvatarUrl) editAvatarUrl.value = currentUser.user_metadata?.avatar_url || '';
       }
 
       openModal(editProfileModal);
@@ -1455,15 +1245,30 @@ function setupModals() {
       });
 
       if (error) throw error;
-      if (data?.user) currentUser = data.user;
 
+      // Update current user object
+      if (data?.user) {
+        currentUser = data.user;
+      } else {
+        currentUser = {
+          ...currentUser,
+          user_metadata: {
+            ...currentUser.user_metadata,
+            full_name: displayName || currentUser.user_metadata?.full_name,
+            avatar_url: avatarUrl || currentUser.user_metadata?.avatar_url
+          }
+        };
+      }
+
+      // Reload profile view
       setupUserMenu();
-      loadProfile();
+      await loadProfile();
+
       closeModal(editProfileModal);
-      showToast('Profile updated successfully!', 'success');
+      alert('Profile updated successfully!');
     } catch (err) {
       console.error('Failed to update profile:', err);
-      showToast('Failed to update profile: ' + err.message, 'error');
+      alert('Failed to update profile: ' + err.message);
     }
   });
 
@@ -1478,12 +1283,6 @@ function setupModals() {
   if (newChatBtn) {
     newChatBtn.removeEventListener('click', createChat);
     newChatBtn.addEventListener('click', () => {
-      if (HAS_SUPABASE_CONFIG && !useSupabase) {
-        showLoginScreen();
-        showToast('Sign in to start a chat', 'info');
-        return;
-      }
-
       if (useSupabase) {
         openModal(addBotModal);
       } else {
@@ -1492,20 +1291,13 @@ function setupModals() {
     });
   }
 
-  closeBotSettingsModal?.addEventListener('click', () => {
-    closeModal(botSettingsModal);
-    myBotsList?.querySelectorAll('.my-bot-item').forEach(el => el.classList.remove('selected'));
-  });
-  botSettingsSaveBtn?.addEventListener('click', saveBotSettings);
-  botSettingsChatBtn?.addEventListener('click', openBotChatFromSettings);
-
   // Close modals on backdrop click
   [totpModal, addBotModal, createBotModal, myBotsModal, botSettingsModal].forEach(modal => {
     modal?.addEventListener('click', (e) => {
       if (e.target === modal) {
         closeModal(modal);
-        if (modal === botSettingsModal) {
-          myBotsList?.querySelectorAll('.my-bot-item').forEach(el => el.classList.remove('selected'));
+        if (modal === myBotsModal || modal === botSettingsModal) {
+          clearMyBotSelection();
         }
       }
     });
@@ -1552,9 +1344,9 @@ let wizardData = {
   robloxAvatarUrl: null,
   description: null,
   systemPrompt: null,
+  isPublic: false,
   shareCode: null,
-  botId: null,
-  isPublic: false
+  botId: null
 };
 
 function resetWizard() {
@@ -1565,9 +1357,9 @@ function resetWizard() {
     robloxAvatarUrl: null,
     description: null,
     systemPrompt: null,
+    isPublic: false,
     shareCode: null,
-    botId: null,
-    isPublic: false
+    botId: null
   };
 
   document.getElementById('robloxInput').value = '';
@@ -1669,17 +1461,18 @@ async function generateBotPrompt() {
     wizardData.shareCode = bot.share_code;
     wizardData.botId = bot.id;
 
+    await Promise.allSettled([loadMyBots(), loadProfile()]);
+
     // Update step 3 UI
     document.getElementById('botAvatar').src = wizardData.robloxAvatarUrl || 'https://via.placeholder.com/80';
     document.getElementById('botName').textContent = wizardData.robloxDisplayName || wizardData.robloxUsername;
     document.getElementById('botShareCode').textContent = wizardData.shareCode;
     document.getElementById('botShareLink').textContent = `${window.location.origin}/b/${wizardData.shareCode}`;
 
-    await Promise.allSettled([loadMyBots(), loadProfile()]);
     showWizardStep(3);
   } catch (err) {
     console.error('Bot creation failed:', err);
-    showToast('Failed to create bot: ' + err.message, 'error');
+    alert('Failed to create bot: ' + err.message);
   } finally {
     btnText.style.display = 'inline';
     btnLoading.style.display = 'none';
@@ -1701,6 +1494,8 @@ async function startChatWithNewBot() {
       name: wizardData.robloxDisplayName || wizardData.robloxUsername,
       avatarUrl: wizardData.robloxAvatarUrl,
       shareCode: wizardData.shareCode,
+      robloxUsername: wizardData.robloxUsername,
+      description: wizardData.description,
       messages: [],
       conversation: [],
       notes: [],
@@ -1727,7 +1522,7 @@ async function addBotByCode() {
   const code = Array.from(codeInputs).map(i => i.value).join('').toUpperCase();
 
   if (code.length !== 4) {
-    showToast('Please enter a 4-digit code', 'error');
+    alert('Please enter a 4-digit code');
     return;
   }
 
@@ -1736,7 +1531,7 @@ async function addBotByCode() {
     const bot = await window.essx.getBotByCode(code);
 
     if (!bot) {
-      showToast('Bot not found with that code', 'error');
+      alert('Bot not found with that code');
       return;
     }
 
@@ -1750,6 +1545,8 @@ async function addBotByCode() {
       name: bot.roblox_username || bot.name,
       avatarUrl: bot.roblox_avatar_url,
       shareCode: bot.share_code,
+      robloxUsername: bot.roblox_username,
+      description: bot.description,
       messages: [],
       conversation: [],
       notes: [],
@@ -1774,7 +1571,7 @@ async function addBotByCode() {
     }
   } catch (err) {
     console.error('Failed to add bot:', err);
-    showToast('Failed to add bot: ' + err.message, 'error');
+    alert('Failed to add bot: ' + err.message);
   }
 }
 
@@ -2042,52 +1839,6 @@ let state = {
   }
 };
 
-let activeTab = 'chats';
-
-function setHeaderForTab(tabName) {
-  activeTab = tabName || 'chats';
-
-  const makeIcon = (emoji, bg = '#007AFF') => {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="${bg}"/><text x="50" y="66" font-size="44" fill="white" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700">${emoji}</text></svg>`;
-    return 'data:image/svg+xml,' + encodeURIComponent(svg);
-  };
-
-  if (tabName === 'marketplace') {
-    if (contactName) contactName.textContent = 'Marketplace';
-    if (avatarImg) avatarImg.src = makeIcon('🛍️', '#FF9500');
-    if (searchBtn) searchBtn.style.display = 'none';
-    searchBar?.classList.remove('active');
-    if (headerCenter) headerCenter.style.cursor = 'default';
-    contactModal?.classList.remove('active');
-    return;
-  }
-
-  if (tabName === 'profile') {
-    if (contactName) contactName.textContent = 'Profile';
-    if (avatarImg) avatarImg.src = makeIcon('👤', '#34C759');
-    if (searchBtn) searchBtn.style.display = 'none';
-    searchBar?.classList.remove('active');
-    if (headerCenter) headerCenter.style.cursor = 'default';
-    contactModal?.classList.remove('active');
-    return;
-  }
-
-  if (tabName === 'moderate') {
-    if (contactName) contactName.textContent = 'Moderation';
-    if (avatarImg) avatarImg.src = makeIcon('✅', '#5856D6');
-    if (searchBtn) searchBtn.style.display = 'none';
-    searchBar?.classList.remove('active');
-    if (headerCenter) headerCenter.style.cursor = 'default';
-    contactModal?.classList.remove('active');
-    return;
-  }
-
-  // chats
-  if (searchBtn) searchBtn.style.display = '';
-  if (headerCenter) headerCenter.style.cursor = 'pointer';
-  updateHeader();
-}
-
 // Load user profile from localStorage
 const PROFILE_KEY = 'imessage_user_profile';
 function loadUserProfile() {
@@ -2287,7 +2038,7 @@ function createChat(mood = null) {
 
 function getChat() {
   if (!state.currentChatId || !state.chats[state.currentChatId]) {
-    if (!useSupabase && !HAS_SUPABASE_CONFIG) {
+    if (!useSupabase) {
       createChat();
     } else {
       return null;
@@ -2316,10 +2067,6 @@ function updateHeader() {
       avatarImg.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#007AFF"/><text x="50" y="65" font-size="40" fill="white" text-anchor="middle">?</text></svg>');
     } else if (chat.avatarUrl) {
       avatarImg.src = chat.avatarUrl;
-    } else {
-      const initial = (chat.name || 'B').trim().charAt(0).toUpperCase();
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5856D6"/><stop offset="1" stop-color="#AF52DE"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#g)"/><text x="50" y="65" font-size="44" fill="white" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700">${initial}</text></svg>`;
-      avatarImg.src = 'data:image/svg+xml,' + encodeURIComponent(svg);
     }
     // Otherwise keep the default avatar that was loaded
   }
@@ -2340,38 +2087,68 @@ function renderChatList() {
   });
 
   if (chats.length === 0) {
-    chatList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">💬</div><div class="empty-state-text">No chats yet</div></div>';
+    chatList.innerHTML = `
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <div class="empty-state-text">No chats yet</div>
+        <div class="empty-state-subtext">Add a bot to start chatting</div>
+      </div>
+    `;
     return;
   }
 
   chatList.innerHTML = chats.map(chat => {
     const lastMsg = chat.messages[chat.messages.length - 1];
-    const preview = lastMsg ? (lastMsg.text || '[Image]').substring(0, 35) : 'New chat';
+    const preview = lastMsg ? (lastMsg.text || '[Image]').substring(0, 40) : 'New chat';
     const time = formatTime(chat.updatedAt);
     const active = chat.id === state.currentChatId;
     const isSupport = chat.isSupport || chat.shareCode === 'HELP';
 
-    // Determine avatar source (never reuse current header avatar; it can be stale)
+    // Determine avatar source with fallback handling
     let avatarContent;
     if (isSupport) {
-      avatarContent = '?';
+      avatarContent = '<div class="chat-avatar-placeholder support-avatar">?</div>';
     } else if (chat.avatarUrl) {
-      avatarContent = `<img src="${chat.avatarUrl}" alt="${chat.name}">`;
+      const initials = (chat.name || 'B')[0].toUpperCase();
+      avatarContent = `
+        <img src="${chat.avatarUrl}" alt="${chat.name}"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <div class="chat-avatar-placeholder" style="display:none;">${initials}</div>
+      `;
     } else {
-      avatarContent = (chat.name?.charAt(0).toUpperCase() || 'B');
+      const initials = (chat.name || 'B')[0].toUpperCase();
+      avatarContent = `<div class="chat-avatar-placeholder">${initials}</div>`;
     }
 
+    // Count unread messages (sent messages that don't have readAt)
+    const unreadCount = chat.messages.filter(m => m.type === 'received' && !m.readAt).length;
+    const hasUnread = unreadCount > 0;
+
     return `
-      <div class="chat-item ${active ? 'active' : ''} ${isSupport ? 'support' : ''}" data-id="${chat.id}">
+      <div class="chat-item ${active ? 'active' : ''} ${isSupport ? 'support' : ''} ${hasUnread ? 'unread' : ''}" data-id="${chat.id}">
         <div class="chat-item-avatar">
           ${avatarContent}
         </div>
         <div class="chat-item-content">
-          <div class="chat-item-name">${isSupport ? '📌 Support' : chat.name}</div>
-          <div class="chat-item-preview">${preview}</div>
+          <div class="chat-item-header">
+            <div class="chat-item-name">${isSupport ? '📌 Support' : (chat.name || 'Unknown Bot')}</div>
+            <div class="chat-item-time">${time}</div>
+          </div>
+          <div class="chat-item-footer">
+            <div class="chat-item-preview">${preview}</div>
+            ${hasUnread ? `<div class="chat-item-badge">${unreadCount}</div>` : ''}
+          </div>
         </div>
-        <div class="chat-item-time">${time}</div>
-        ${!isSupport ? `<button class="chat-item-delete" data-id="${chat.id}">Delete</button>` : ''}
+        ${!isSupport ? `
+          <button class="chat-item-delete" data-id="${chat.id}" title="Delete chat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        ` : ''}
       </div>
     `;
   }).join('');
@@ -2397,13 +2174,7 @@ function renderChatList() {
 }
 
 async function deleteChat(id) {
-  const result = await openDialog({
-    title: 'Delete conversation?',
-    message: 'This will remove the chat from your account.',
-    okText: 'Delete',
-    cancelText: 'Cancel'
-  });
-  if (!result.ok) return;
+  if (!confirm('Delete this conversation?')) return;
 
   const chatItem = chatList.querySelector(`.chat-item[data-id="${id}"]`);
 
@@ -2525,7 +2296,50 @@ function closeSidebar() {
 menuBtn?.addEventListener('click', openSidebar);
 sidebarBackdrop?.addEventListener('click', closeSidebar);
 
-// NOTE: new chat button is wired in setupModals() so it respects Supabase mode.
+if (newChatBtn) {
+  console.log('🎯 NEW CHAT BTN FOUND, attaching listener');
+  newChatBtn.addEventListener('click', function(e) {
+    console.log('🔵 NEW CHAT BUTTON CLICKED - Event fired!');
+    e.preventDefault();
+
+    try {
+      // Fade out current chat area smoothly
+      chatArea?.classList.add('switching');
+
+      setTimeout(() => {
+        const newId = createChat();
+        console.log('✅ New chat created:', newId);
+
+        state.currentChatId = newId;
+        saveState();
+
+        renderChatList();
+
+        if (chatArea) {
+          chatArea.innerHTML = '';
+        }
+
+        closeSidebar();
+
+        // Fade back in
+        requestAnimationFrame(() => {
+          chatArea?.classList.remove('switching');
+        });
+
+        setTimeout(() => {
+          console.log('⏱️ Greeting starting');
+          greet();
+        }, 100);
+      }, 150);
+
+    } catch (e) {
+      console.error('❌ Error:', e);
+    }
+  });
+  console.log('✅ New chat button listener attached');
+} else {
+  console.error('❌ NEW CHAT BTN NOT FOUND!');
+}
 
 // ============================================================
 // Messages
@@ -2808,7 +2622,6 @@ async function sendMessageSupabase(text) {
   updateChatPreview(state.currentChatId);
   scrollToBottom();
   autoResizeTextarea();
-  updateCharCounter();
 
   showTyping();
 
@@ -2828,10 +2641,12 @@ async function sendMessageSupabase(text) {
         }
       }
 
-      // Add assistant message to local state + render it (single bubble)
+      // Add assistant message to local state
       chat.messages.push(response.assistantMessage);
       chat.conversation = response.conversation || chat.conversation;
-      addMessageToDOM(response.assistantMessage, chat.messages.length - 1, true);
+
+      // Display the response with chunking for natural feel
+      await displayResponseChunked(response.assistantMessage.text, chat);
     }
 
   } catch (error) {
@@ -2905,7 +2720,7 @@ async function sendMessage() {
       saveUserProfile();
     } else {
       const remaining = Math.ceil((state.userProfile.suspendedUntil - Date.now()) / 60000);
-      showToast(`you're suspended for ${remaining} more minutes. chill.`, 'error', 3500);
+      alert(`you're suspended for ${remaining} more minutes. chill.`);
       return;
     }
   }
@@ -2957,7 +2772,6 @@ async function sendMessage() {
   chat.conversation.push({ role: 'user', content: text });
 
   chatInput.value = '';
-  updateCharCounter();
   state.replyingTo = null;
   replyPreview?.classList.remove('active');
 
@@ -3517,18 +3331,31 @@ async function processAssistantMessage(text, chat, skipTools = false) {
     }
   }
 
+  // Chunk the message into natural breaks (sentences, periods, etc)
+  const chunks = chunkMessage(cleanText);
+
   chat.conversation.push({ role: 'assistant', content: text });
 
-  // Render as a single message bubble (chunking was causing weird splits)
+  // Send chunks with delays between them (skip if no actual text after cleaning)
   if (cleanText.trim()) {
-    const assistantMsg = {
-      type: 'received',
-      text: cleanText,
-      timestamp: Date.now()
-    };
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      if (!chunk.trim()) continue; // Skip empty chunks
 
-    chat.messages.push(assistantMsg);
-    addMessageToDOM(assistantMsg, chat.messages.length - 1, true);
+      const assistantMsg = {
+        type: 'received',
+        text: chunk,
+        timestamp: Date.now()
+      };
+
+      chat.messages.push(assistantMsg);
+      addMessageToDOM(assistantMsg, chat.messages.length - 1, true);
+
+      // Wait before sending next chunk (except on last one)
+      if (i < chunks.length - 1) {
+        await new Promise(r => setTimeout(r, 300 + Math.random() * 200));
+      }
+    }
   }
 
   chat.updatedAt = Date.now();
@@ -3759,7 +3586,7 @@ function updateCharCounter() {
   const max = 300;
 
   if (len === 0) {
-    charCounter.textContent = `0/${max}`;
+    charCounter.textContent = '';
     charCounter.className = 'char-counter';
   } else if (len > max * 0.9) {
     charCounter.textContent = `${len}/${max}`;
@@ -4083,8 +3910,6 @@ if (document.readyState === 'loading') {
 // ============================================================
 
 headerCenter?.addEventListener('click', () => {
-  if (activeTab !== 'chats') return;
-
   // Get current chat
   const currentChat = state.chats[state.currentChatId];
   if (!currentChat) return;
@@ -4093,12 +3918,23 @@ headerCenter?.addEventListener('click', () => {
   const modalAvatar = document.getElementById('modalAvatar');
   const modalName = document.getElementById('modalName');
   const modalUsername = document.getElementById('modalUsername');
+  const modalRobloxUsername = document.getElementById('modalRobloxUsername');
+  const modalShareCode = document.getElementById('modalShareCode');
   const modalBio = document.getElementById('modalBio');
 
-  if (modalAvatar && currentChat.avatarUrl) {
-    modalAvatar.innerHTML = `<img src="${currentChat.avatarUrl}" alt="${currentChat.name}">`;
-  } else if (modalAvatar) {
-    modalAvatar.textContent = (currentChat.name || 'B')[0].toUpperCase();
+  // Avatar with fallback placeholder
+  if (modalAvatar) {
+    if (currentChat.avatarUrl) {
+      const initials = (currentChat.name || 'B')[0].toUpperCase();
+      modalAvatar.innerHTML = `
+        <img src="${currentChat.avatarUrl}" alt="${currentChat.name}"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <div class="contact-avatar-placeholder" style="display:none;">${initials}</div>
+      `;
+    } else {
+      const initials = (currentChat.name || 'B')[0].toUpperCase();
+      modalAvatar.innerHTML = `<div class="contact-avatar-placeholder">${initials}</div>`;
+    }
   }
 
   if (modalName) {
@@ -4109,8 +3945,16 @@ headerCenter?.addEventListener('click', () => {
     modalUsername.textContent = '@' + (currentChat.name || 'bot').toLowerCase().replace(/\s+/g, '');
   }
 
+  if (modalRobloxUsername) {
+    modalRobloxUsername.textContent = currentChat.robloxUsername || 'unknown';
+  }
+
+  if (modalShareCode) {
+    modalShareCode.textContent = currentChat.shareCode || 'XXXX';
+  }
+
   if (modalBio) {
-    modalBio.textContent = currentChat.description || 'just vibin';
+    modalBio.textContent = currentChat.description || 'No description available.';
   }
 
   contactModal?.classList.add('active');
