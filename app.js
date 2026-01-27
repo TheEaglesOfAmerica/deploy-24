@@ -276,10 +276,13 @@ let totpSignupState = {
 
 async function startTotpSignup() {
   try {
-    // Generate TOTP secret and QR code on the backend (browser can't import node modules)
-    const response = await window.essx.api('/auth/totp/signup/start', {
-      method: 'POST'
-    });
+    // TOTP setup requires an authenticated Supabase user (server verifies via Bearer token)
+    if (!window.essx?.isLoggedIn?.()) {
+      alert('Please sign in first (Google), then set up your authenticator.');
+      return;
+    }
+
+    const response = await window.essx.api('/auth/totp/setup', { method: 'POST' });
 
     const secret = response?.secret;
     const qrCodeUrl = response?.qrCode;
@@ -336,37 +339,22 @@ async function completeTotpSignup() {
   }
 
   try {
-    // Verify the code
-    const response = await window.essx.api('/auth/totp/verify-signup', {
+    if (!window.essx?.isLoggedIn?.()) {
+      alert('Please sign in first (Google).');
+      return;
+    }
+
+    // Verify the code for the current user
+    const response = await window.essx.api('/auth/totp/verify', {
       method: 'POST',
       body: JSON.stringify({
-        code,
-        secret: totpSignupState.secret
+        code
       })
     });
 
     if (response.success) {
-      // Create anonymous user with TOTP
-      // Store the secret locally for future logins
-      const userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
-      localStorage.setItem('chat_bots_user_id', userId);
-      localStorage.setItem('chat_bots_totp_secret', totpSignupState.secret);
-
       closeModal(totpModal);
-
-      // Simulate successful auth
-      currentUser = { id: userId, user_metadata: { full_name: 'User' } };
-      isAuthenticated = true;
-      useSupabase = true;
-
-      hideLoginScreen();
-      setupUserMenu();
-      await ensureSupportChat();
-      renderChatList();
-      renderMessages();
-      updateHeader();
-
-      console.log('✅ Authenticated with authenticator');
+      alert('Authenticator enabled successfully.');
     }
   } catch (err) {
     console.error('Verification failed:', err);
