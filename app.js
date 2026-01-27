@@ -80,6 +80,7 @@ async function initSupabase() {
   try {
     if (typeof CONFIG === 'undefined' || !CONFIG.SUPABASE_URL) {
       console.log('📦 No Supabase config found, using local mode');
+      loginScreen?.classList.add('hidden');
       return false;
     }
 
@@ -106,6 +107,7 @@ async function initSupabase() {
     return true;
   } catch (err) {
     console.error('Supabase init failed:', err);
+    loginScreen?.classList.add('hidden');
     return false;
   }
 }
