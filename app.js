@@ -89,6 +89,15 @@ function setLoginHint(text) {
   }
 }
 
+function clearBlockingOverlays({ keepTutorial = false } = {}) {
+  document.querySelectorAll('.modal-backdrop.visible').forEach(el => {
+    if (keepTutorial && el.id === 'tutorialModal') return;
+    el.classList.remove('visible');
+  });
+  contactModal?.classList.remove('active');
+  closeSidebar();
+}
+
 function resetLoginState() {
   loginPending = false;
   if (googleLoginBtn) {
@@ -126,6 +135,13 @@ async function initSupabase() {
 
     // Show login screen
     showLoginScreen();
+
+    // On mobile OAuth redirects, session detection can be slightly delayed
+    setTimeout(async () => {
+      if (window.essx?.isLoggedIn?.() && !isAuthenticated) {
+        await handleAuthSuccess(window.essx.user);
+      }
+    }, 1200);
     return true;
   } catch (err) {
     console.error('Supabase init failed:', err);
@@ -156,9 +172,20 @@ async function handleAuthSuccess(user) {
   resetLoginState();
   hideLoginScreen();
   closeSidebar();
+  clearBlockingOverlays();
+  hideLoadingSplash({ immediate: true });
+  setTimeout(() => hideLoadingSplash({ immediate: true }), 1500);
 
   // Load chats from Supabase
-  await loadChatsFromSupabase();
+  try {
+    await withTimeout(loadChatsFromSupabase(), 4000);
+  } catch (e) {
+    console.error('Chat load timed out/failed:', e);
+  } finally {
+    renderChatList();
+    renderMessages();
+    updateHeader();
+  }
 
   // Setup user menu in sidebar
   setupUserMenu();
@@ -174,6 +201,7 @@ function handleSignOut() {
   state.currentChatId = null;
 
   resetLoginState();
+  clearBlockingOverlays();
   showLoginScreen();
   renderChatList();
 }
@@ -3261,16 +3289,23 @@ async function detectUserLocation() {
 
 console.log('🎬 INIT STARTING...');
 
+function withTimeout(promise, ms = 2000) {
+  return Promise.race([
+    promise,
+    new Promise(resolve => setTimeout(() => resolve(null), ms))
+  ]);
+}
+
 async function init() {
   console.log('⚙️ Init function called');
 
   // Setup modal event listeners
   setupModals();
 
-  // Load avatar and detect location in parallel
-  await Promise.all([
-    loadAvatar(),
-    detectUserLocation()
+  // Kick off non-critical startup tasks, but don't let them block the UI
+  await Promise.allSettled([
+    withTimeout(loadAvatar(), 1800),
+    withTimeout(detectUserLocation(), 1800)
   ]);
 
   // Try to initialize Supabase
@@ -3324,15 +3359,22 @@ async function init() {
   console.log('✨ Init complete');
 }
 
-function hideLoadingSplash() {
+function hideLoadingSplash({ immediate = false } = {}) {
+  const loadingSplash = document.getElementById('loadingSplash');
+  if (!loadingSplash) return;
+
+  if (immediate) {
+    loadingSplash.classList.add('hidden');
+    loadingSplash.style.pointerEvents = 'none';
+    loadingSplash.style.display = 'none';
+    return;
+  }
+
   setTimeout(() => {
-    const loadingSplash = document.getElementById('loadingSplash');
-    if (loadingSplash) {
-      loadingSplash.classList.add('hidden');
-      setTimeout(() => {
-        loadingSplash.style.display = 'none';
-      }, 800);
-    }
+    loadingSplash.classList.add('hidden');
+    setTimeout(() => {
+      loadingSplash.style.display = 'none';
+    }, 800);
   }, 300);
 }
 
