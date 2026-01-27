@@ -1,14 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
-const { rateLimit } = require('../middleware/ratelimit');
 const OpenAI = require('openai');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
-
-const messageLimiter = rateLimit({ key: 'messages', limit: 30, windowMs: 60_000 });
 
 // Get all user's chats
 router.get('/', requireAuth, async (req, res) => {
@@ -28,8 +25,7 @@ router.get('/', requireAuth, async (req, res) => {
           share_code,
           roblox_username,
           roblox_avatar_url,
-          name,
-          description
+          name
         )
       `)
       .eq('user_id', req.user.id)
@@ -59,8 +55,7 @@ router.get('/:id', requireAuth, async (req, res) => {
           roblox_username,
           roblox_avatar_url,
           name,
-          system_prompt,
-          description
+          system_prompt
         )
       `)
       .eq('id', id)
@@ -137,10 +132,10 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 // Send a message in a chat
-router.post('/:id/message', requireAuth, messageLimiter, async (req, res) => {
+router.post('/:id/message', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { text, replyTo } = req.body;
+    const { text } = req.body;
 
     if (!text) {
       return res.status(400).json({ error: 'Message text is required' });
@@ -155,9 +150,7 @@ router.post('/:id/message', requireAuth, messageLimiter, async (req, res) => {
         *,
         bots (
           system_prompt,
-          name,
-          description,
-          roblox_username
+          name
         )
       `)
       .eq('id', id)
@@ -172,16 +165,14 @@ router.post('/:id/message', requireAuth, messageLimiter, async (req, res) => {
     const userMessage = {
       type: 'sent',
       text,
-      timestamp: Date.now(),
-      replyTo: replyTo || null
+      timestamp: Date.now()
     };
 
     const messages = [...(chat.messages || []), userMessage];
     const conversation = [...(chat.conversation || [])];
 
     // Add user message to conversation
-    const userContent = replyTo ? `(replying to: ${replyTo})\n${text}` : text;
-    conversation.push({ role: 'user', content: userContent });
+    conversation.push({ role: 'user', content: text });
 
     // Call OpenAI
     try {

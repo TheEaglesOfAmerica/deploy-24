@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Chat Bots</title>
+  <title>Spunnie - Create AI Bots</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -22,7 +22,7 @@
   <div class="loading-splash" id="loadingSplash">
     <div class="loading-content">
       <div class="loading-logo">💬</div>
-      <div class="loading-text" id="loadingText">Chat Bots</div>
+      <div class="loading-text">Spunnie</div>
       <div class="loading-bar">
         <div class="loading-progress"></div>
       </div>
@@ -32,23 +32,43 @@
   <!-- Login Screen -->
   <div class="login-screen" id="loginScreen">
     <div class="login-container">
-      <div class="login-logo">💬</div>
-      <h1 class="login-title">Chat Bots</h1>
+      <div class="login-logo">🌀</div>
+      <h1 class="login-title">Spunnie</h1>
       <p class="login-subtitle">Create and share AI bots based on Roblox users</p>
+
+      <!-- Error message area -->
+      <div class="login-error" id="loginError" style="display: none;"></div>
 
       <div class="login-buttons">
         <button class="login-btn google-btn" id="googleLoginBtn">
-          <svg viewBox="0 0 24 24" width="20" height="20">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-          </svg>
-          Continue with Google
+          <span class="btn-content">
+            <svg viewBox="0 0 24 24" width="20" height="20">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Continue with Google
+          </span>
+          <span class="btn-loading" style="display: none;">
+            <div class="spinner"></div>
+            Signing in...
+          </span>
+        </button>
+
+        <button class="login-btn discord-btn" id="discordLoginBtn">
+          <span class="btn-content">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+            </svg>
+            Continue with Discord
+          </span>
+          <span class="btn-loading" style="display: none;">
+            <div class="spinner"></div>
+            Signing in...
+          </span>
         </button>
       </div>
-
-      <div class="login-hint" id="loginHint">You’ll be redirected to Google and back.</div>
     </div>
   </div>
 
@@ -57,11 +77,104 @@
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <div class="sidebar-title">Messages</div>
-        <button class="marketplace-btn" id="marketplaceBtn" title="Marketplace">🛍️</button>
+        <div class="sidebar-title">Spunnie</div>
         <button class="new-chat-btn" id="newChatBtn" title="New chat">+</button>
       </div>
-      <div class="chat-list" id="chatList"></div>
+
+      <!-- Navigation Tabs -->
+      <div class="sidebar-tabs">
+        <button class="sidebar-tab active" data-tab="chats" id="chatsTab">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>Chats</span>
+        </button>
+        <button class="sidebar-tab" data-tab="marketplace" id="marketplaceTab">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="9" cy="21" r="1"></circle>
+            <circle cx="20" cy="21" r="1"></circle>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+          </svg>
+          <span>Marketplace</span>
+        </button>
+        <button class="sidebar-tab" data-tab="profile" id="profileTab">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <span>Profile</span>
+        </button>
+        <button class="sidebar-tab" data-tab="moderate" id="moderateTab" style="display: none;">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 12l2 2 4-4"></path>
+            <circle cx="12" cy="12" r="10"></circle>
+          </svg>
+          <span>Moderate</span>
+        </button>
+      </div>
+
+      <!-- Chat List -->
+      <div class="sidebar-content" id="sidebarContent">
+        <div class="chat-list" id="chatList"></div>
+
+        <!-- Marketplace View -->
+        <div class="marketplace-view" id="marketplaceView" style="display: none;">
+          <div class="marketplace-header">
+            <h3>Discover Bots</h3>
+            <div class="marketplace-search">
+              <input type="text" id="marketplaceSearch" placeholder="Search bots..." class="marketplace-search-input">
+            </div>
+          </div>
+          <div class="marketplace-grid" id="marketplaceGrid">
+            <!-- Bots will be loaded here -->
+          </div>
+        </div>
+
+        <!-- Profile View -->
+        <div class="profile-view" id="profileView" style="display: none;">
+          <div class="profile-header">
+            <div class="profile-avatar-large" id="profileAvatarLarge"></div>
+            <h3 class="profile-name" id="profileName">User</h3>
+            <button class="profile-edit-btn" id="profileEditBtn">Edit Profile</button>
+          </div>
+
+          <div class="profile-section">
+            <h4>My Bots</h4>
+            <div class="profile-bots-list" id="profileBotsList">
+              <!-- User's bots -->
+            </div>
+          </div>
+
+          <div class="profile-section">
+            <h4>Statistics</h4>
+            <div class="profile-stats">
+              <div class="stat-item">
+                <div class="stat-value" id="statBotsCreated">0</div>
+                <div class="stat-label">Bots Created</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value" id="statTotalChats">0</div>
+                <div class="stat-label">Total Chats</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Moderation View -->
+        <div class="moderation-view" id="moderationView" style="display: none;">
+          <div class="moderation-header">
+            <h3>Bot Moderation</h3>
+            <div class="moderation-stats">
+              <span class="mod-stat">Pending: <strong id="modStatPending">0</strong></span>
+              <span class="mod-stat">Approved: <strong id="modStatApproved">0</strong></span>
+              <span class="mod-stat">Rejected: <strong id="modStatRejected">0</strong></span>
+            </div>
+          </div>
+          <div class="moderation-list" id="moderationList">
+            <!-- Pending bots will be loaded here -->
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Sidebar Backdrop (mobile) -->
@@ -143,43 +256,6 @@
               <polyline points="5 12 12 5 19 12"></polyline>
             </svg>
           </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Marketplace Modal -->
-  <div class="modal-backdrop" id="marketplaceModal">
-    <div class="modal-content marketplace-modal">
-      <div class="modal-header">
-        <h2>Bot Marketplace</h2>
-        <div class="modal-header-actions">
-          <button class="modal-btn secondary" id="marketplaceRefreshBtn">Refresh</button>
-          <button class="modal-close" id="closeMarketplaceModal">&times;</button>
-        </div>
-      </div>
-      <div class="modal-body">
-        <div class="marketplace-subtitle">Popular public bots</div>
-        <div class="marketplace-list" id="marketplaceList"></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-backdrop" id="tutorialModal">
-    <div class="modal-content tutorial-modal">
-      <div class="modal-header">
-        <h2>Quick Tour</h2>
-        <button class="modal-close" id="tutorialCloseBtn">&times;</button>
-      </div>
-      <div class="modal-body">
-        <ol class="tutorial-steps">
-          <li><strong>Create bots</strong> from Roblox users and describe their vibe.</li>
-          <li><strong>Make bots public</strong> to list them in Marketplace.</li>
-          <li><strong>Reply + react</strong> by swiping or long-pressing messages.</li>
-        </ol>
-        <div class="tutorial-actions">
-          <button class="modal-btn secondary" id="tutorialMarketplaceBtn">Open Marketplace</button>
-          <button class="modal-btn primary" id="tutorialDoneBtn">Got it</button>
         </div>
       </div>
     </div>
@@ -527,10 +603,6 @@
           <label>Describe this bot's personality</label>
           <textarea id="botDescription" class="modal-textarea" placeholder="Example: A chill gamer who loves building obstacle courses and friendly trash talking. Uses lots of slang and abbreviations."></textarea>
           <p class="description-hint">Be specific about how the bot should talk, their interests, and personality traits.</p>
-          <label class="modal-checkbox">
-            <input type="checkbox" id="botIsPublic">
-            <span>List this bot in Marketplace</span>
-          </label>
 
           <button class="modal-btn primary" id="wizardNext2">
             <span class="btn-text">Generate Prompt</span>

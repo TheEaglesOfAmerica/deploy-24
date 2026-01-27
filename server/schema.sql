@@ -25,6 +25,11 @@ CREATE TABLE IF NOT EXISTS bots (
   system_prompt TEXT NOT NULL,
   is_public BOOLEAN DEFAULT FALSE,
   chat_count INT DEFAULT 0,
+  approved BOOLEAN DEFAULT NULL,
+  rejected BOOLEAN DEFAULT NULL,
+  moderated_at TIMESTAMPTZ,
+  moderated_by UUID REFERENCES profiles(id),
+  rejection_reason TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -45,6 +50,8 @@ CREATE TABLE IF NOT EXISTS chats (
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_bots_share_code ON bots(share_code);
 CREATE INDEX IF NOT EXISTS idx_bots_creator ON bots(creator_id);
+CREATE INDEX IF NOT EXISTS idx_bots_approved ON bots(approved) WHERE approved = true;
+CREATE INDEX IF NOT EXISTS idx_bots_pending ON bots(approved, rejected) WHERE approved IS NULL AND rejected IS NULL;
 CREATE INDEX IF NOT EXISTS idx_chats_user ON chats(user_id);
 CREATE INDEX IF NOT EXISTS idx_chats_bot ON chats(bot_id);
 CREATE INDEX IF NOT EXISTS idx_chats_updated ON chats(updated_at DESC);
@@ -101,7 +108,7 @@ CREATE POLICY "Users can update own chats" ON chats FOR UPDATE USING (auth.uid()
 CREATE POLICY "Users can delete own chats" ON chats FOR DELETE USING (auth.uid() = user_id);
 
 -- Insert the system Support bot
-INSERT INTO bots (id, creator_id, share_code, roblox_user_id, roblox_username, name, description, system_prompt, is_public)
+INSERT INTO bots (id, creator_id, share_code, roblox_user_id, roblox_username, name, description, system_prompt, is_public, approved)
 VALUES (
   '00000000-0000-0000-0000-000000000001',
   NULL,
@@ -135,5 +142,6 @@ Key features to explain:
 
 Keep responses short and helpful. Use bullet points for lists.
 If asked about something unrelated to the app, politely redirect to app-related help.',
+  TRUE,
   TRUE
 ) ON CONFLICT (share_code) DO NOTHING;

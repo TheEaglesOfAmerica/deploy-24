@@ -327,6 +327,18 @@ body.theme-transitioning .app-container {
   padding: 40px;
   max-width: 400px;
   width: 90%;
+  animation: fadeInUp 0.6s ease backwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .login-logo {
@@ -351,7 +363,30 @@ body.theme-transitioning .app-container {
 .login-subtitle {
   font-size: 16px;
   color: rgba(255, 255, 255, 0.6);
-  margin-bottom: 40px;
+  margin-bottom: 32px;
+}
+
+.login-error {
+  background: rgba(255, 59, 48, 0.1);
+  border: 1px solid rgba(255, 59, 48, 0.3);
+  color: #FF3B30;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 20px;
+  text-align: center;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .login-buttons {
@@ -372,6 +407,40 @@ body.theme-transitioning .app-container {
   cursor: pointer;
   transition: all 0.2s ease;
   border: none;
+  position: relative;
+}
+
+.login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.login-btn .btn-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.login-btn .btn-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.login-btn .spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .login-btn.google-btn {
@@ -379,10 +448,15 @@ body.theme-transitioning .app-container {
   color: #333;
 }
 
-.login-btn.google-btn:hover {
+.login-btn.google-btn:hover:not(:disabled) {
   background: #f5f5f5;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.login-btn.google-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .login-btn.totp-btn {
@@ -420,32 +494,6 @@ body.theme-transitioning .app-container {
   margin-top: 40px;
   font-size: 14px;
   color: rgba(255, 255, 255, 0.4);
-}
-
-.login-btn.loading {
-  opacity: 0.7;
-  pointer-events: none;
-}
-
-.login-hint {
-  margin-top: 12px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
-  text-align: center;
-}
-
-.modal-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 10px 0 16px;
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.modal-checkbox input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
 }
 
 /* ============================================================
@@ -1205,27 +1253,6 @@ body.theme-transitioning .app-container {
 .new-chat-btn:active {
   transform: scale(0.92);
   box-shadow: 0 1px 4px rgba(0, 122, 255, 0.3);
-}
-
-.marketplace-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid var(--border-color);
-  background: var(--surface);
-  color: var(--text-primary);
-  font-size: 16px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s ease, background 0.2s ease;
-  margin-right: 8px;
-}
-
-.marketplace-btn:hover {
-  transform: translateY(-1px);
-  background: var(--surface-hover);
 }
 
 .chat-list {
@@ -5672,141 +5699,690 @@ body.theme-custom.anim-gradient .gradient-bg {
     -webkit-backdrop-filter: blur(10px) saturate(130%);
   }
 }
+/* ============================================================
+   SPUNNIE REBRAND & NEW FEATURES
+   ============================================================ */
 
-/* Marketplace */
-.marketplace-modal {
-  max-width: 640px;
+/* Discord Login Button */
+.discord-btn {
+  background: #5865F2 !important;
+  color: #fff !important;
 }
 
-.modal-header-actions {
+.discord-btn:hover:not(:disabled) {
+  background: #4752C4 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(88, 101, 242, 0.3);
+}
+
+.discord-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(88, 101, 242, 0.2);
+}
+
+.discord-btn .spinner {
+  border-color: rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+}
+
+/* Sidebar Tabs Navigation */
+.sidebar-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  background: var(--imessage-sidebar-bg);
+  border-bottom: 1px solid var(--separator);
+}
+
+.sidebar-tab {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.marketplace-subtitle {
-  color: var(--text-secondary);
-  font-size: 13px;
+.sidebar-tab svg {
+  transition: transform 0.2s ease;
+}
+
+.sidebar-tab:hover {
+  background: var(--imessage-gray);
+  color: var(--text-primary);
+}
+
+.sidebar-tab.active {
+  background: var(--imessage-blue);
+  color: #fff;
+}
+
+.sidebar-tab.active svg {
+  transform: scale(1.1);
+}
+
+/* Sidebar Content Container */
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ============================================================
+   MARKETPLACE VIEW
+   ============================================================ */
+
+.marketplace-view {
+  padding: 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.marketplace-header {
+  margin-bottom: 20px;
+}
+
+.marketplace-header h3 {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+}
+
+.marketplace-search {
+  position: relative;
+}
+
+.marketplace-search-input {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--separator);
+  background: var(--imessage-input-bg);
+  font-size: 15px;
+  color: var(--text-primary);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.marketplace-search-input:focus {
+  border-color: var(--imessage-blue);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+}
+
+.marketplace-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.marketplace-card {
+  background: var(--imessage-bg);
+  border: 1px solid var(--separator);
+  border-radius: 16px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.marketplace-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-color: var(--imessage-blue);
+}
+
+.marketplace-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 12px;
 }
 
-.marketplace-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 60vh;
-  overflow: auto;
-}
-
-.marketplace-item {
-  display: grid;
-  grid-template-columns: 56px 1fr auto;
-  gap: 12px;
-  align-items: center;
-  padding: 12px;
-  border-radius: 14px;
-  background: var(--surface);
-  border: 1px solid var(--border-color);
-}
-
-.marketplace-item-avatar {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  overflow: hidden;
-  background: var(--surface-hover);
-}
-
-.marketplace-item-avatar img {
-  width: 100%;
-  height: 100%;
+.marketplace-card-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
   object-fit: cover;
+  border: 2px solid var(--separator);
 }
 
-.marketplace-item-name {
+.marketplace-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.marketplace-card-name {
+  font-size: 16px;
   font-weight: 600;
-  margin-bottom: 4px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.marketplace-item-meta {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 4px;
-}
-
-.marketplace-item-desc {
+.marketplace-card-username {
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.marketplace-card-description {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 12px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.marketplace-item-action .modal-btn {
-  white-space: nowrap;
-}
-
-.profile-card {
+.marketplace-card-footer {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--surface);
-  border: 1px solid var(--border-color);
-  margin-bottom: 12px;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid var(--separator);
 }
 
-.profile-card-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+.marketplace-card-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.marketplace-card-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.marketplace-card-stat svg {
+  width: 14px;
+  height: 14px;
+}
+
+.marketplace-card-btn {
+  padding: 6px 16px;
+  border-radius: 8px;
+  border: none;
+  background: var(--imessage-blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.marketplace-card-btn:hover {
+  background: #0066d6;
+  transform: scale(1.05);
+}
+
+.marketplace-card-btn.pending {
+  background: #FF9500;
+  pointer-events: none;
+}
+
+.marketplace-card-btn.pending::after {
+  content: ' (Pending)';
+}
+
+.marketplace-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+}
+
+.marketplace-empty-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.marketplace-empty-text {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.marketplace-empty-subtext {
+  font-size: 14px;
+  color: var(--text-tertiary);
+}
+
+/* ============================================================
+   PROFILE VIEW
+   ============================================================ */
+
+.profile-view {
+  padding: 24px 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.profile-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.profile-avatar-large {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--imessage-blue) 0%, #5856D6 100%);
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 122, 255, 0.3);
+}
+
+.profile-avatar-large img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
   object-fit: cover;
 }
 
-.profile-card-name {
+.profile-name {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.profile-edit-btn {
+  padding: 10px 24px;
+  border-radius: 12px;
+  border: 1px solid var(--separator);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.profile-edit-btn:hover {
+  background: var(--imessage-gray);
+  border-color: var(--text-secondary);
+}
+
+.profile-section {
+  margin-bottom: 32px;
+}
+
+.profile-section h4 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.profile-bots-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.profile-bot-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--imessage-input-bg);
+  border-radius: 12px;
+  border: 1px solid var(--separator);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.profile-bot-item:hover {
+  background: var(--imessage-gray);
+  transform: translateX(4px);
+}
+
+.profile-bot-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.profile-bot-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-bot-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-bot-code {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-family: 'SF Mono', monospace;
+}
+
+.profile-bot-status {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.profile-bot-status.approved {
+  background: rgba(52, 199, 89, 0.15);
+  color: #34C759;
+}
+
+.profile-bot-status.pending {
+  background: rgba(255, 149, 0, 0.15);
+  color: #FF9500;
+}
+
+.profile-bot-status.rejected {
+  background: rgba(255, 59, 48, 0.15);
+  color: #FF3B30;
+}
+
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 20px;
+  background: var(--imessage-input-bg);
+  border-radius: 16px;
+  border: 1px solid var(--separator);
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--imessage-blue);
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.profile-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+   MODERATION BADGE
+   ============================================================ */
+
+.moderation-required-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  background: rgba(255, 149, 0, 0.15);
+  color: #FF9500;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+/* ============================================================
+   MOBILE RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .sidebar-tabs {
+    padding: 8px 8px;
+  }
+
+  .sidebar-tab span {
+    display: none;
+  }
+
+  .sidebar-tab {
+    padding: 10px;
+  }
+
+  .marketplace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   DARK THEME SUPPORT
+   ============================================================ */
+
+body.theme-dark .marketplace-card,
+body.theme-dark .profile-bot-item,
+body.theme-dark .stat-item {
+  background: #2c2c2e;
+  border-color: #3a3a3c;
+}
+
+body.theme-dark .marketplace-card:hover,
+body.theme-dark .profile-bot-item:hover {
+  background: #3a3a3c;
+}
+
+body.theme-dark .marketplace-search-input,
+body.theme-dark .profile-edit-btn {
+  background: #2c2c2e;
+  border-color: #3a3a3c;
+}
+
+/* ============================================================
+   MODERATION VIEW
+   ============================================================ */
+
+.moderation-view {
+  padding: 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.moderation-header {
+  margin-bottom: 20px;
+}
+
+.moderation-header h3 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 12px 0;
+}
+
+.moderation-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.mod-stat {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.mod-stat strong {
+  color: var(--text-primary);
   font-weight: 600;
 }
 
-.profile-card-meta {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.my-bot-public {
-  margin-top: 6px;
-}
-
-.my-bot-prompt.saved {
-  outline: 2px solid #34c759;
-}
-
-.my-bot-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.tutorial-modal {
-  max-width: 520px;
-}
-
-.tutorial-steps {
-  margin: 4px 0 18px 18px;
-  padding: 0;
+.moderation-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  color: var(--text-secondary);
+  gap: 12px;
 }
 
-.tutorial-steps li {
+.mod-bot-card {
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 16px;
+  transition: all 0.2s;
+}
+
+.mod-bot-card:hover {
+  background: #f0f0f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.mod-bot-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mod-bot-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #ddd;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.mod-bot-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mod-bot-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mod-bot-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 2px 0;
+}
+
+.mod-bot-username {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.mod-bot-creator {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.mod-bot-description {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
   line-height: 1.4;
 }
 
-.tutorial-actions {
+.mod-bot-actions {
   display: flex;
   gap: 8px;
-  justify-content: flex-end;
-  flex-wrap: wrap;
+}
+
+.mod-action-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mod-approve-btn {
+  background: #34C759;
+  color: white;
+}
+
+.mod-approve-btn:hover {
+  background: #2fb350;
+  transform: translateY(-1px);
+}
+
+.mod-reject-btn {
+  background: #FF3B30;
+  color: white;
+}
+
+.mod-reject-btn:hover {
+  background: #e6352a;
+  transform: translateY(-1px);
+}
+
+.mod-view-btn {
+  background: #007AFF;
+  color: white;
+}
+
+.mod-view-btn:hover {
+  background: #0066dd;
+  transform: translateY(-1px);
+}
+
+.mod-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+}
+
+.mod-empty-state svg {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 16px;
+  opacity: 0.3;
+}
+
+.mod-empty-state h4 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.mod-empty-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Dark theme for moderation */
+body.theme-dark .mod-bot-card {
+  background: #2c2c2e;
+  border-color: #3a3a3c;
+}
+
+body.theme-dark .mod-bot-card:hover {
+  background: #3a3a3c;
 }

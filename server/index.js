@@ -26,6 +26,8 @@ app.locals.supabase = supabase;
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/bots', require('./routes/bots'));
 app.use('/api/chats', require('./routes/chats'));
+app.use('/api/marketplace', require('./routes/marketplace'));
+app.use('/api/moderation', require('./routes/moderation'));
 app.use('/api', require('./routes/utils'));
 
 // Health check

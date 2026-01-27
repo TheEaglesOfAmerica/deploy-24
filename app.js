@@ -28,28 +28,10 @@ const contactModal = document.getElementById('contactModal');
 const headerCenter = document.getElementById('headerCenter');
 const closeContactModal = document.getElementById('closeContactModal');
 const messageContact = document.getElementById('messageContact');
-const modalAvatar = document.getElementById('modalAvatar');
-const modalName = document.getElementById('modalName');
-const modalUsername = document.getElementById('modalUsername');
-const modalPlatform = document.getElementById('modalPlatform');
-const modalStatus = document.getElementById('modalStatus');
-const modalBio = document.getElementById('modalBio');
-const marketplaceBtn = document.getElementById('marketplaceBtn');
-const marketplaceModal = document.getElementById('marketplaceModal');
-const closeMarketplaceModal = document.getElementById('closeMarketplaceModal');
-const marketplaceList = document.getElementById('marketplaceList');
-const marketplaceRefreshBtn = document.getElementById('marketplaceRefreshBtn');
-const tutorialModal = document.getElementById('tutorialModal');
-const tutorialCloseBtn = document.getElementById('tutorialCloseBtn');
-const tutorialDoneBtn = document.getElementById('tutorialDoneBtn');
-const tutorialMarketplaceBtn = document.getElementById('tutorialMarketplaceBtn');
 
 // New modal elements
 const loginScreen = document.getElementById('loginScreen');
 const googleLoginBtn = document.getElementById('googleLoginBtn');
-const loginHint = document.getElementById('loginHint');
-const loadingSplash = document.getElementById('loadingSplash');
-const loadingText = document.getElementById('loadingText');
 const totpSignupBtn = document.getElementById('totpSignupBtn');
 const totpModal = document.getElementById('totpModal');
 const closeTotpModal = document.getElementById('closeTotpModal');
@@ -61,7 +43,6 @@ const closeCreateBotModal2 = document.getElementById('closeCreateBotModal2');
 const closeCreateBotModal3 = document.getElementById('closeCreateBotModal3');
 const myBotsModal = document.getElementById('myBotsModal');
 const closeMyBotsModal = document.getElementById('closeMyBotsModal');
-const myBotsList = document.getElementById('myBotsList');
 
 console.log('DOM Elements:', {
   chatArea: !!chatArea,
@@ -81,49 +62,6 @@ console.log('DOM Elements:', {
 let isAuthenticated = false;
 let currentUser = null;
 let useSupabase = false; // Flag to switch between localStorage and Supabase
-let loginPending = false;
-const LOGIN_HINT_DEFAULT = 'You’ll be redirected to Google and back.';
-const TUTORIAL_KEY = 'imessage_tutorial_seen_v1';
-const LOADING_TEXT_DEFAULT = 'Chat Bots';
-let authTransitionActive = false;
-let loadingHideTimer = null;
-let loadingRemoveTimer = null;
-
-function setLoginHint(text) {
-  if (loginHint) {
-    loginHint.textContent = text || LOGIN_HINT_DEFAULT;
-  }
-}
-
-function showLoadingSplash(text) {
-  if (!loadingSplash) return;
-  if (loadingHideTimer) clearTimeout(loadingHideTimer);
-  if (loadingRemoveTimer) clearTimeout(loadingRemoveTimer);
-  loadingSplash.classList.remove('hidden');
-  loadingSplash.style.display = 'flex';
-  loadingSplash.style.pointerEvents = 'auto';
-  if (loadingText && text) {
-    loadingText.textContent = text;
-  }
-}
-
-function clearBlockingOverlays({ keepTutorial = false } = {}) {
-  document.querySelectorAll('.modal-backdrop.visible').forEach(el => {
-    if (keepTutorial && el.id === 'tutorialModal') return;
-    el.classList.remove('visible');
-  });
-  contactModal?.classList.remove('active');
-  closeSidebar();
-}
-
-function resetLoginState() {
-  loginPending = false;
-  if (googleLoginBtn) {
-    googleLoginBtn.disabled = false;
-    googleLoginBtn.classList.remove('loading');
-  }
-  setLoginHint();
-}
 
 // Initialize Supabase client
 async function initSupabase() {
@@ -153,13 +91,6 @@ async function initSupabase() {
 
     // Show login screen
     showLoginScreen();
-
-    // On mobile OAuth redirects, session detection can be slightly delayed
-    setTimeout(async () => {
-      if (window.essx?.isLoggedIn?.() && !isAuthenticated) {
-        await handleAuthSuccess(window.essx.user);
-      }
-    }, 1200);
     return true;
   } catch (err) {
     console.error('Supabase init failed:', err);
@@ -171,8 +102,6 @@ function showLoginScreen() {
   if (loginScreen) {
     loginScreen.classList.remove('hidden');
   }
-  closeSidebar();
-  resetLoginState();
 }
 
 function hideLoginScreen() {
@@ -183,34 +112,23 @@ function hideLoginScreen() {
 
 async function handleAuthSuccess(user) {
   console.log('✅ Auth success:', user?.email);
-  authTransitionActive = true;
-  showLoadingSplash('Signing you in…');
   isAuthenticated = true;
   currentUser = user;
   useSupabase = true;
 
-  resetLoginState();
   hideLoginScreen();
-  closeSidebar();
-  clearBlockingOverlays();
 
   // Load chats from Supabase
-  try {
-    await withTimeout(loadChatsFromSupabase(), 9000);
-  } catch (e) {
-    console.error('Chat load timed out/failed:', e);
-  } finally {
-    renderChatList();
-    renderMessages();
-    updateHeader();
-    authTransitionActive = false;
-    hideLoadingSplash({ immediate: true, force: true });
-  }
+  await loadChatsFromSupabase();
 
   // Setup user menu in sidebar
   setupUserMenu();
 
-  maybeShowTutorial();
+  // Show moderate tab if user is admin
+  const moderateTab = document.getElementById('moderateTab');
+  if (moderateTab && user?.user_metadata?.is_admin) {
+    moderateTab.style.display = 'flex';
+  }
 }
 
 function handleSignOut() {
@@ -219,11 +137,11 @@ function handleSignOut() {
   useSupabase = false;
   state.chats = {};
   state.currentChatId = null;
-  authTransitionActive = false;
 
-  resetLoginState();
-  clearBlockingOverlays();
-  hideLoadingSplash({ immediate: true, force: true });
+  // Hide moderate tab
+  const moderateTab = document.getElementById('moderateTab');
+  if (moderateTab) moderateTab.style.display = 'none';
+
   showLoginScreen();
   renderChatList();
 }
@@ -251,10 +169,7 @@ function setupUserMenu() {
   }
 
   if (myBotsBtn) {
-    myBotsBtn.addEventListener('click', async () => {
-      await loadMyBots();
-      openModal(myBotsModal);
-    });
+    myBotsBtn.addEventListener('click', () => openModal(myBotsModal));
   }
 
   if (logoutBtn) {
@@ -278,9 +193,6 @@ async function loadChatsFromSupabase() {
         id: chat.id,
         botId: chat.bot_id,
         name: bot?.roblox_username || bot?.name || 'Unknown',
-        botName: bot?.name || bot?.roblox_username || 'Bot',
-        robloxUsername: bot?.roblox_username || null,
-        description: bot?.description || '',
         avatarUrl: bot?.roblox_avatar_url,
         shareCode: bot?.share_code,
         messages: chat.messages || [],
@@ -344,111 +256,6 @@ async function ensureSupportChat() {
     }
   } catch (err) {
     console.log('Support chat creation handled:', err.message);
-  }
-}
-
-function maybeShowTutorial() {
-  if (!tutorialModal) return;
-  if (localStorage.getItem(TUTORIAL_KEY)) return;
-  localStorage.setItem(TUTORIAL_KEY, '1');
-  openModal(tutorialModal);
-}
-
-async function loadMyBots() {
-  if (!useSupabase || !myBotsList) return;
-  myBotsList.innerHTML = '<div class="empty-state"><div class="empty-state-text">Loading bots…</div></div>';
-  try {
-    const bots = await window.essx.getMyBots();
-    renderMyBots(bots);
-  } catch (err) {
-    console.error('Failed to load my bots:', err);
-    myBotsList.innerHTML = '<div class="empty-state"><div class="empty-state-text">Failed to load bots</div></div>';
-  }
-}
-
-function renderMyBots(bots) {
-  if (!myBotsList) return;
-  if (!bots || bots.length === 0) {
-    myBotsList.innerHTML = '<div class="empty-state"><div class="empty-state-text">No bots yet</div></div>';
-    return;
-  }
-
-  const profileName = currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'User';
-  const profileAvatar = currentUser?.user_metadata?.avatar_url || 'https://via.placeholder.com/40';
-
-  const profileCard = `
-    <div class="profile-card">
-      <img class="profile-card-avatar" src="${profileAvatar}" alt="${profileName}">
-      <div class="profile-card-info">
-        <div class="profile-card-name">${profileName}</div>
-        <div class="profile-card-meta">${bots.length} bot${bots.length === 1 ? '' : 's'}</div>
-      </div>
-    </div>
-  `;
-
-  const botsHtml = bots.map(bot => {
-    const avatar = bot.roblox_avatar_url ? `<img src="${bot.roblox_avatar_url}" alt="${bot.name || bot.roblox_username || 'Bot'}">` : '';
-    const name = bot.name || bot.roblox_username || 'Bot';
-    const username = bot.roblox_username ? `@${bot.roblox_username}` : bot.share_code;
-    const chats = typeof bot.chat_count === 'number' ? `${bot.chat_count} chats` : '';
-    const prompt = (bot.system_prompt || '').trim();
-
-    return `
-      <div class="my-bot-item" data-bot-id="${bot.id}">
-        <div class="my-bot-avatar">${avatar}</div>
-        <div class="my-bot-content">
-          <div class="my-bot-header">
-            <div class="my-bot-name">${name}</div>
-            <div class="my-bot-meta">${username}${chats ? ` • ${chats}` : ''}</div>
-          </div>
-          <label class="modal-checkbox my-bot-public">
-            <input type="checkbox" data-bot-public="${bot.id}" ${bot.is_public ? 'checked' : ''}>
-            <span>Public in Marketplace</span>
-          </label>
-          <textarea class="modal-textarea my-bot-prompt" data-bot-prompt="${bot.id}" rows="4">${prompt}</textarea>
-          <div class="my-bot-actions">
-            <button class="modal-btn secondary" data-bot-save="${bot.id}">Save Prompt</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  myBotsList.innerHTML = `${profileCard}${botsHtml}`;
-
-  myBotsList.querySelectorAll('input[data-bot-public]').forEach(input => {
-    input.addEventListener('change', () => updateBotPublic(input.dataset.botPublic, input.checked));
-  });
-  myBotsList.querySelectorAll('button[data-bot-save]').forEach(btn => {
-    btn.addEventListener('click', () => updateBotPrompt(btn.dataset.botSave));
-  });
-}
-
-async function updateBotPublic(botId, isPublic) {
-  try {
-    await window.essx.updateBot(botId, { is_public: !!isPublic });
-    await loadMarketplace();
-  } catch (err) {
-    console.error('Failed to update bot visibility:', err);
-    alert('Could not update visibility');
-  }
-}
-
-async function updateBotPrompt(botId) {
-  const promptEl = myBotsList?.querySelector(`textarea[data-bot-prompt="${botId}"]`);
-  if (!promptEl) return;
-  const prompt = promptEl.value.trim();
-  if (!prompt) {
-    alert('Prompt cannot be empty');
-    return;
-  }
-  try {
-    await window.essx.updateBot(botId, { system_prompt: prompt });
-    promptEl.classList.add('saved');
-    setTimeout(() => promptEl.classList.remove('saved'), 800);
-  } catch (err) {
-    console.error('Failed to update bot prompt:', err);
-    alert('Could not update prompt');
   }
 }
 
@@ -565,24 +372,425 @@ async function completeTotpSignup() {
   }
 }
 
+// ============================================================
+// SIDEBAR TABS & NAVIGATION
+// ============================================================
+
+function setupSidebarTabs() {
+  const tabs = document.querySelectorAll('.sidebar-tab');
+  const chatList = document.getElementById('chatList');
+  const marketplaceView = document.getElementById('marketplaceView');
+  const profileView = document.getElementById('profileView');
+  const moderationView = document.getElementById('moderationView');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabName = tab.dataset.tab;
+
+      // Update active state
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      // Show appropriate view
+      if (tabName === 'chats') {
+        chatList.style.display = 'block';
+        marketplaceView.style.display = 'none';
+        profileView.style.display = 'none';
+        if (moderationView) moderationView.style.display = 'none';
+      } else if (tabName === 'marketplace') {
+        chatList.style.display = 'none';
+        marketplaceView.style.display = 'block';
+        profileView.style.display = 'none';
+        if (moderationView) moderationView.style.display = 'none';
+        loadMarketplace();
+      } else if (tabName === 'profile') {
+        chatList.style.display = 'none';
+        marketplaceView.style.display = 'none';
+        profileView.style.display = 'block';
+        if (moderationView) moderationView.style.display = 'none';
+        loadProfile();
+      } else if (tabName === 'moderate') {
+        chatList.style.display = 'none';
+        marketplaceView.style.display = 'none';
+        profileView.style.display = 'none';
+        if (moderationView) {
+          moderationView.style.display = 'block';
+          loadModeration();
+        }
+      }
+    });
+  });
+}
+
+async function loadMarketplace() {
+  const marketplaceGrid = document.getElementById('marketplaceGrid');
+
+  if (!marketplaceGrid) return;
+
+  try {
+    // Get approved bots from API
+    const response = await window.essx.api('/marketplace');
+    const bots = response.bots || [];
+
+    if (bots.length === 0) {
+      marketplaceGrid.innerHTML = `
+        <div class="marketplace-empty">
+          <div class="marketplace-empty-icon">🏪</div>
+          <div class="marketplace-empty-text">No bots available yet</div>
+          <div class="marketplace-empty-subtext">Be the first to create one!</div>
+        </div>
+      `;
+      return;
+    }
+
+    marketplaceGrid.innerHTML = bots.map(bot => `
+      <div class="marketplace-card" onclick="openBotFromMarketplace('${bot.id}')">
+        <div class="marketplace-card-header">
+          <img class="marketplace-card-avatar" src="${bot.roblox_avatar_url || 'https://via.placeholder.com/48'}" alt="${bot.name}">
+          <div class="marketplace-card-info">
+            <div class="marketplace-card-name">${bot.name}</div>
+            <div class="marketplace-card-username">@${bot.roblox_username}</div>
+          </div>
+        </div>
+        <div class="marketplace-card-description">${bot.description || 'No description'}</div>
+        <div class="marketplace-card-footer">
+          <div class="marketplace-card-stats">
+            <div class="marketplace-card-stat">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span>${bot.chat_count || 0}</span>
+            </div>
+          </div>
+          <button class="marketplace-card-btn" onclick="event.stopPropagation(); addBotFromMarketplace('${bot.id}')">Add</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    console.error('Failed to load marketplace:', err);
+    marketplaceGrid.innerHTML = `
+      <div class="marketplace-empty">
+        <div class="marketplace-empty-text">Failed to load marketplace</div>
+        <div class="marketplace-empty-subtext">Try again later</div>
+      </div>
+    `;
+  }
+}
+
+async function addBotFromMarketplace(botId) {
+  try {
+    // Create chat with bot
+    const chat = await window.essx.createChat(botId);
+
+    // Get bot details to add to state
+    const bot = await window.essx.api(`/bots/${botId}`);
+
+    state.chats[chat.id] = {
+      id: chat.id,
+      botId: bot.id,
+      name: bot.name || bot.roblox_username,
+      avatarUrl: bot.roblox_avatar_url,
+      shareCode: bot.share_code,
+      messages: [],
+      conversation: [],
+      notes: [],
+      updatedAt: Date.now(),
+      isSupport: false
+    };
+
+    state.currentChatId = chat.id;
+
+    // Switch to chats tab
+    document.querySelector('.sidebar-tab[data-tab="chats"]')?.click();
+
+    renderChatList();
+    renderMessages();
+    updateHeader();
+
+    // Send initial greeting
+    greet();
+  } catch (err) {
+    console.error('Failed to add bot:', err);
+    alert('Failed to add bot: ' + err.message);
+  }
+}
+
+async function loadProfile() {
+  const profileName = document.getElementById('profileName');
+  const profileAvatarLarge = document.getElementById('profileAvatarLarge');
+  const profileBotsList = document.getElementById('profileBotsList');
+  const statBotsCreated = document.getElementById('statBotsCreated');
+  const statTotalChats = document.getElementById('statTotalChats');
+
+  if (!profileName || !currentUser) return;
+
+  // Set profile info
+  profileName.textContent = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'User';
+
+  if (profileAvatarLarge) {
+    const avatarUrl = currentUser.user_metadata?.avatar_url;
+    if (avatarUrl) {
+      profileAvatarLarge.innerHTML = `<img src="${avatarUrl}" alt="Avatar">`;
+    } else {
+      profileAvatarLarge.textContent = (currentUser.user_metadata?.full_name || 'U')[0].toUpperCase();
+    }
+  }
+
+  try {
+    // Get user's bots
+    const bots = await window.essx.getMyBots();
+
+    // Update stats
+    if (statBotsCreated) statBotsCreated.textContent = bots.length;
+    if (statTotalChats) {
+      const totalChats = bots.reduce((sum, bot) => sum + (bot.chat_count || 0), 0);
+      statTotalChats.textContent = totalChats;
+    }
+
+    // Display bots
+    if (profileBotsList) {
+      if (bots.length === 0) {
+        profileBotsList.innerHTML = `
+          <div class="profile-empty">
+            <p>No bots created yet</p>
+          </div>
+        `;
+      } else {
+        profileBotsList.innerHTML = bots.map(bot => `
+          <div class="profile-bot-item" onclick="openBotFromProfile('${bot.id}')">
+            <img class="profile-bot-avatar" src="${bot.roblox_avatar_url || 'https://via.placeholder.com/40'}" alt="${bot.name}">
+            <div class="profile-bot-info">
+              <div class="profile-bot-name">${bot.name}</div>
+              <div class="profile-bot-code">${bot.share_code}</div>
+            </div>
+            <span class="profile-bot-status ${bot.approved ? 'approved' : (bot.rejected ? 'rejected' : 'pending')}">
+              ${bot.approved ? 'Approved' : (bot.rejected ? 'Rejected' : 'Pending')}
+            </span>
+          </div>
+        `).join('');
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load profile:', err);
+  }
+}
+
+function openBotFromMarketplace(botId) {
+  // Find if chat already exists with this bot
+  const existingChat = Object.values(state.chats).find(chat => chat.botId === botId);
+
+  if (existingChat) {
+    state.currentChatId = existingChat.id;
+    document.querySelector('.sidebar-tab[data-tab="chats"]')?.click();
+    renderChatList();
+    renderMessages();
+    updateHeader();
+  } else {
+    addBotFromMarketplace(botId);
+  }
+}
+
+function openBotFromProfile(botId) {
+  // Similar to marketplace - switch to existing chat or create new
+  openBotFromMarketplace(botId);
+}
+
+// ============================================================
+// MODERATION FUNCTIONS
+// ============================================================
+
+async function loadModeration() {
+  const moderationList = document.getElementById('moderationList');
+  const modStatPending = document.getElementById('modStatPending');
+  const modStatApproved = document.getElementById('modStatApproved');
+  const modStatRejected = document.getElementById('modStatRejected');
+
+  if (!moderationList) return;
+
+  try {
+    // Load stats
+    const statsResponse = await window.essx.api('/moderation/stats');
+    if (modStatPending) modStatPending.textContent = statsResponse.pending || 0;
+    if (modStatApproved) modStatApproved.textContent = statsResponse.approved || 0;
+    if (modStatRejected) modStatRejected.textContent = statsResponse.rejected || 0;
+
+    // Load pending bots
+    const response = await window.essx.api('/moderation/pending');
+    const bots = response.bots || [];
+
+    if (bots.length === 0) {
+      moderationList.innerHTML = `
+        <div class="mod-empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 12l2 2 4-4"></path>
+            <circle cx="12" cy="12" r="10"></circle>
+          </svg>
+          <h4>No Pending Bots</h4>
+          <p>All bots have been reviewed</p>
+        </div>
+      `;
+      return;
+    }
+
+    moderationList.innerHTML = bots.map(bot => `
+      <div class="mod-bot-card" data-bot-id="${bot.id}">
+        <div class="mod-bot-header">
+          <div class="mod-bot-avatar">
+            <img src="${bot.roblox_avatar_url || 'https://via.placeholder.com/48'}" alt="${bot.name}">
+          </div>
+          <div class="mod-bot-info">
+            <h4 class="mod-bot-name">${bot.name}</h4>
+            <p class="mod-bot-username">@${bot.roblox_username || 'unknown'}</p>
+            <p class="mod-bot-creator">Created by ${bot.profiles?.display_name || 'Unknown'}</p>
+          </div>
+        </div>
+        <p class="mod-bot-description">${bot.description || 'No description provided'}</p>
+        <div class="mod-bot-actions">
+          <button class="mod-action-btn mod-approve-btn" onclick="approveBot('${bot.id}')">
+            Approve
+          </button>
+          <button class="mod-action-btn mod-reject-btn" onclick="rejectBot('${bot.id}')">
+            Reject
+          </button>
+          <button class="mod-action-btn mod-view-btn" onclick="viewBotDetails('${bot.id}')">
+            View Details
+          </button>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    console.error('Failed to load moderation:', err);
+    moderationList.innerHTML = `
+      <div class="mod-empty-state">
+        <h4>Error Loading Bots</h4>
+        <p>Failed to fetch pending bots. Try again later.</p>
+      </div>
+    `;
+  }
+}
+
+async function approveBot(botId) {
+  if (!confirm('Approve this bot? It will be visible in the marketplace.')) return;
+
+  try {
+    await window.essx.api(`/moderation/${botId}/approve`, { method: 'POST' });
+
+    // Remove card from DOM
+    const card = document.querySelector(`.mod-bot-card[data-bot-id="${botId}"]`);
+    if (card) card.remove();
+
+    // Reload moderation to update stats
+    loadModeration();
+
+    alert('Bot approved successfully!');
+  } catch (err) {
+    console.error('Failed to approve bot:', err);
+    alert('Failed to approve bot: ' + err.message);
+  }
+}
+
+async function rejectBot(botId) {
+  const reason = prompt('Enter rejection reason (optional):');
+  if (reason === null) return; // User cancelled
+
+  try {
+    await window.essx.api(`/moderation/${botId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    });
+
+    // Remove card from DOM
+    const card = document.querySelector(`.mod-bot-card[data-bot-id="${botId}"]`);
+    if (card) card.remove();
+
+    // Reload moderation to update stats
+    loadModeration();
+
+    alert('Bot rejected successfully!');
+  } catch (err) {
+    console.error('Failed to reject bot:', err);
+    alert('Failed to reject bot: ' + err.message);
+  }
+}
+
+async function viewBotDetails(botId) {
+  try {
+    const bot = await window.essx.api(`/bots/${botId}`);
+
+    const details = `
+Bot Details:
+- Name: ${bot.name}
+- Roblox User: @${bot.roblox_username}
+- Share Code: ${bot.share_code}
+- Description: ${bot.description || 'N/A'}
+- System Prompt: ${bot.system_prompt || 'N/A'}
+- Created: ${new Date(bot.created_at).toLocaleDateString()}
+    `.trim();
+
+    alert(details);
+  } catch (err) {
+    console.error('Failed to view bot details:', err);
+    alert('Failed to load bot details');
+  }
+}
+
+// Helper function to show login errors
+function showLoginError(message) {
+  const loginError = document.getElementById('loginError');
+  if (loginError) {
+    loginError.textContent = message;
+    loginError.style.display = 'block';
+    setTimeout(() => {
+      loginError.style.display = 'none';
+    }, 5000);
+  }
+}
+
+// Helper function to set button loading state
+function setButtonLoading(button, isLoading) {
+  if (!button) return;
+
+  const content = button.querySelector('.btn-content');
+  const loading = button.querySelector('.btn-loading');
+
+  if (isLoading) {
+    if (content) content.style.display = 'none';
+    if (loading) loading.style.display = 'flex';
+    button.disabled = true;
+  } else {
+    if (content) content.style.display = 'flex';
+    if (loading) loading.style.display = 'none';
+    button.disabled = false;
+  }
+}
+
 // Setup modal event listeners
 function setupModals() {
+  // Sidebar Tabs Navigation
+  setupSidebarTabs();
+
   // Login buttons
   googleLoginBtn?.addEventListener('click', async () => {
-    if (loginPending) return;
-    loginPending = true;
-    closeSidebar();
-    if (googleLoginBtn) {
-      googleLoginBtn.disabled = true;
-      googleLoginBtn.classList.add('loading');
-    }
-    setLoginHint('Opening Google…');
+    setButtonLoading(googleLoginBtn, true);
     try {
       await window.essx.signInWithGoogle();
     } catch (err) {
       console.error('Google sign in failed:', err);
-      resetLoginState();
-      alert('Sign-in failed. Please try again.');
+      showLoginError('Failed to sign in with Google. Please try again.');
+      setButtonLoading(googleLoginBtn, false);
+    }
+  });
+
+  // Discord login
+  const discordBtn = document.getElementById('discordLoginBtn');
+  discordBtn?.addEventListener('click', async () => {
+    setButtonLoading(discordBtn, true);
+    try {
+      await window.essx.signInWithDiscord();
+    } catch (err) {
+      console.error('Discord sign in failed:', err);
+      showLoginError('Failed to sign in with Discord. Please try again.');
+      setButtonLoading(discordBtn, false);
     }
   });
 
@@ -717,8 +925,7 @@ let wizardData = {
   description: null,
   systemPrompt: null,
   shareCode: null,
-  botId: null,
-  isPublic: false
+  botId: null
 };
 
 function resetWizard() {
@@ -730,8 +937,7 @@ function resetWizard() {
     description: null,
     systemPrompt: null,
     shareCode: null,
-    botId: null,
-    isPublic: false
+    botId: null
   };
 
   document.getElementById('robloxInput').value = '';
@@ -739,8 +945,6 @@ function resetWizard() {
   document.getElementById('robloxError').style.display = 'none';
   document.getElementById('wizardNext1').disabled = true;
   document.getElementById('botDescription').value = '';
-  const publicToggle = document.getElementById('botIsPublic');
-  if (publicToggle) publicToggle.checked = false;
 
   showWizardStep(1);
 }
@@ -799,7 +1003,6 @@ async function generateBotPrompt() {
   if (!description) return;
 
   wizardData.description = description;
-  wizardData.isPublic = !!document.getElementById('botIsPublic')?.checked;
 
   const btn = document.getElementById('wizardNext2');
   const btnText = btn.querySelector('.btn-text');
@@ -826,8 +1029,7 @@ async function generateBotPrompt() {
       roblox_avatar_url: wizardData.robloxAvatarUrl,
       name: wizardData.robloxDisplayName || wizardData.robloxUsername,
       description: description,
-      system_prompt: wizardData.systemPrompt,
-      is_public: wizardData.isPublic
+      system_prompt: wizardData.systemPrompt
     });
 
     wizardData.shareCode = bot.share_code;
@@ -1436,64 +1638,6 @@ function updateHeader() {
     }
     // Otherwise keep the default avatar that was loaded
   }
-
-  updateContactModal(chat);
-}
-
-function deriveContactInfo(chat) {
-  const isSupport = chat.isSupport || chat.shareCode === 'HELP';
-  if (isSupport) {
-    return {
-      name: 'Support',
-      username: '@support',
-      platform: 'Chat Bots',
-      status: 'Available',
-      bio: 'Official support bot'
-    };
-  }
-
-  const baseName = chat.botName || chat.name || 'Bot';
-  const usernameBase = chat.robloxUsername || baseName;
-  const cleanedUser = String(usernameBase).replace(/\s+/g, '').toLowerCase();
-  const username = `@${cleanedUser.slice(0, 24)}`;
-
-  const desc = (chat.description || '').trim();
-  const promptHints = (chat.conversation || []).find(m => m.role === 'system')?.content || '';
-  const sourceText = `${desc}\n${promptHints}`.toLowerCase();
-
-  const status =
-    sourceText.includes('sleep') ? 'Sleeping' :
-    sourceText.includes('school') ? 'At school' :
-    sourceText.includes('work') ? 'Working' :
-    sourceText.includes('busy') ? 'Busy' :
-    'Online';
-
-  const bio = desc || baseName;
-
-  return {
-    name: baseName,
-    username,
-    platform: chat.robloxUsername ? 'Roblox' : 'Chat Bots',
-    status,
-    bio
-  };
-}
-
-function updateContactModal(chat) {
-  const info = deriveContactInfo(chat);
-  if (modalName) modalName.textContent = info.name;
-  if (modalUsername) modalUsername.textContent = info.username;
-  if (modalPlatform) modalPlatform.textContent = info.platform;
-  if (modalStatus) modalStatus.textContent = info.status;
-  if (modalBio) modalBio.textContent = info.bio;
-
-  if (modalAvatar) {
-    const img = modalAvatar.querySelector('img');
-    if (img && chat.avatarUrl) {
-      img.src = chat.avatarUrl;
-      img.alt = info.name;
-    }
-  }
 }
 
 // ============================================================
@@ -1691,19 +1835,6 @@ function closeSidebar() {
 
 menuBtn?.addEventListener('click', openSidebar);
 sidebarBackdrop?.addEventListener('click', closeSidebar);
-marketplaceBtn?.addEventListener('click', async () => {
-  await loadMarketplace();
-  openModal(marketplaceModal);
-});
-closeMarketplaceModal?.addEventListener('click', () => closeModal(marketplaceModal));
-marketplaceRefreshBtn?.addEventListener('click', loadMarketplace);
-tutorialCloseBtn?.addEventListener('click', () => closeModal(tutorialModal));
-tutorialDoneBtn?.addEventListener('click', () => closeModal(tutorialModal));
-tutorialMarketplaceBtn?.addEventListener('click', async () => {
-  closeModal(tutorialModal);
-  await loadMarketplace();
-  openModal(marketplaceModal);
-});
 
 if (newChatBtn) {
   console.log('🎯 NEW CHAT BTN FOUND, attaching listener');
@@ -1773,73 +1904,6 @@ function renderMessages() {
   requestAnimationFrame(() => {
     scrollToBottom();
   });
-}
-
-async function loadMarketplace() {
-  if (!useSupabase || !marketplaceList) return;
-  marketplaceList.innerHTML = '<div class="empty-state"><div class="empty-state-text">Loading marketplace…</div></div>';
-  try {
-    const bots = await window.essx.getMarketplaceBots();
-    renderMarketplace(bots);
-  } catch (err) {
-    console.error('Failed to load marketplace:', err);
-    marketplaceList.innerHTML = '<div class="empty-state"><div class="empty-state-text">Failed to load marketplace</div></div>';
-  }
-}
-
-function renderMarketplace(bots) {
-  if (!marketplaceList) return;
-  if (!bots || bots.length === 0) {
-    marketplaceList.innerHTML = '<div class="empty-state"><div class="empty-state-text">No public bots yet</div></div>';
-    return;
-  }
-
-  marketplaceList.innerHTML = bots.map(bot => {
-    const avatar = bot.roblox_avatar_url
-      ? `<img src="${bot.roblox_avatar_url}" alt="${bot.name || bot.roblox_username || 'Bot'}">`
-      : '';
-    const name = bot.name || bot.roblox_username || 'Bot';
-    const user = bot.roblox_username ? `@${bot.roblox_username}` : bot.share_code;
-    const chats = typeof bot.chat_count === 'number' ? `${bot.chat_count} chats` : '';
-    const desc = (bot.description || '').trim() || 'No description';
-
-    return `
-      <div class="marketplace-item">
-        <div class="marketplace-item-avatar">${avatar}</div>
-        <div class="marketplace-item-content">
-          <div class="marketplace-item-name">${name}</div>
-          <div class="marketplace-item-meta">${user}${chats ? ` • ${chats}` : ''}</div>
-          <div class="marketplace-item-desc">${desc}</div>
-        </div>
-        <div class="marketplace-item-action">
-          <button class="modal-btn primary" data-bot-id="${bot.id}">Chat</button>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  marketplaceList.querySelectorAll('button[data-bot-id]').forEach(btn => {
-    btn.addEventListener('click', () => marketplaceStartChat(btn.dataset.botId));
-  });
-}
-
-async function marketplaceStartChat(botId) {
-  if (!botId || !useSupabase) return;
-  try {
-    const result = await window.essx.createChat(botId);
-    await loadChatsFromSupabase();
-    if (result?.id) {
-      state.currentChatId = result.id;
-      renderChatList();
-      renderMessages();
-      updateHeader();
-    }
-    closeModal(marketplaceModal);
-    closeSidebar();
-  } catch (err) {
-    console.error('Failed to start chat from marketplace:', err);
-    alert('Could not start chat');
-  }
 }
 
 function addMessageToDOM(msg, idx, isNew = true) {
@@ -2082,14 +2146,11 @@ async function sendMessageSupabase(text) {
     return;
   }
 
-  const replyTo = state.replyingTo;
-
   // Add user message to UI immediately
   const userMsg = {
     type: 'sent',
     text: text,
-    timestamp: Date.now(),
-    replyTo: replyTo || null
+    timestamp: Date.now()
   };
 
   chat.messages.push(userMsg);
@@ -2106,18 +2167,11 @@ async function sendMessageSupabase(text) {
 
   try {
     // Send message via Supabase API
-    const response = await window.essx.sendMessage(chat.id, text, replyTo);
+    const response = await window.essx.sendMessage(chat.id, text);
 
     hideTyping();
 
     if (response.assistantMessage) {
-      if (response.userMessage) {
-        chat.messages[userMsgIndex] = {
-          ...chat.messages[userMsgIndex],
-          ...response.userMessage
-        };
-      }
-
       // Update read receipt on the user's last message
       if (response.userMessage?.readAt) {
         chat.messages[userMsgIndex].readAt = response.userMessage.readAt;
@@ -2147,9 +2201,6 @@ async function sendMessageSupabase(text) {
 
     chat.messages.push(errorMsg);
     addMessageToDOM(errorMsg, chat.messages.length - 1, true);
-  } finally {
-    state.replyingTo = null;
-    replyPreview?.classList.remove('active');
   }
 
   state.isSending = false;
@@ -3311,23 +3362,16 @@ async function detectUserLocation() {
 
 console.log('🎬 INIT STARTING...');
 
-function withTimeout(promise, ms = 2000) {
-  return Promise.race([
-    promise,
-    new Promise(resolve => setTimeout(() => resolve(null), ms))
-  ]);
-}
-
 async function init() {
   console.log('⚙️ Init function called');
 
   // Setup modal event listeners
   setupModals();
 
-  // Kick off non-critical startup tasks, but don't let them block the UI
-  await Promise.allSettled([
-    withTimeout(loadAvatar(), 1800),
-    withTimeout(detectUserLocation(), 1800)
+  // Load avatar and detect location in parallel
+  await Promise.all([
+    loadAvatar(),
+    detectUserLocation()
   ]);
 
   // Try to initialize Supabase
@@ -3340,7 +3384,7 @@ async function init() {
     // Supabase available but not logged in - show login screen
     console.log('🔐 Supabase available, waiting for login');
     // Hide loading splash to show login screen
-    hideLoadingSplash({ immediate: true, force: true });
+    hideLoadingSplash();
     return; // Don't proceed until logged in
   } else {
     // Fallback to localStorage mode
@@ -3376,38 +3420,20 @@ async function init() {
   }, 100);
 
   // Hide loading splash
-  if (!authTransitionActive) {
-    hideLoadingSplash();
-  }
+  hideLoadingSplash();
 
   console.log('✨ Init complete');
 }
 
-function hideLoadingSplash({ immediate = false, force = false } = {}) {
-  if (!loadingSplash) return;
-  if (authTransitionActive && !force && !immediate) return;
-  if (loadingHideTimer) clearTimeout(loadingHideTimer);
-  if (loadingRemoveTimer) clearTimeout(loadingRemoveTimer);
-
-  const resetLoadingText = () => {
-    if (loadingText) loadingText.textContent = LOADING_TEXT_DEFAULT;
-  };
-
-  if (immediate) {
-    loadingSplash.classList.add('hidden');
-    loadingSplash.style.pointerEvents = 'none';
-    loadingSplash.style.display = 'none';
-    resetLoadingText();
-    return;
-  }
-
-  loadingHideTimer = setTimeout(() => {
-    loadingSplash.classList.add('hidden');
-    loadingRemoveTimer = setTimeout(() => {
-      loadingSplash.style.display = 'none';
-      loadingSplash.style.pointerEvents = 'none';
-      resetLoadingText();
-    }, 800);
+function hideLoadingSplash() {
+  setTimeout(() => {
+    const loadingSplash = document.getElementById('loadingSplash');
+    if (loadingSplash) {
+      loadingSplash.classList.add('hidden');
+      setTimeout(() => {
+        loadingSplash.style.display = 'none';
+      }, 800);
+    }
   }, 300);
 }
 
