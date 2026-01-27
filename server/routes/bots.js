@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth, optionalAuth } = require('../middleware/auth');
+const { rateLimit } = require('../middleware/ratelimit');
+
+const createBotLimiter = rateLimit({ key: 'createBot', limit: 6, windowMs: 60_000 });
+const updateBotLimiter = rateLimit({ key: 'updateBot', limit: 20, windowMs: 60_000 });
 
 // Generate a unique 4-character code
 function generateShareCode() {
@@ -103,7 +107,7 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // Create a new bot
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, createBotLimiter, async (req, res) => {
   try {
     const {
       roblox_user_id,
@@ -170,7 +174,7 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 // Update a bot
-router.patch('/:id', requireAuth, async (req, res) => {
+router.patch('/:id', requireAuth, updateBotLimiter, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, system_prompt, is_public } = req.body;

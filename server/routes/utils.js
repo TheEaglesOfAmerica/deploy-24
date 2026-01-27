@@ -1,11 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
+const { rateLimit } = require('../middleware/ratelimit');
 const OpenAI = require('openai');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+
+const promptLimiter = rateLimit({ key: 'prompt', limit: 10, windowMs: 60_000 });
 
 // Fetch Roblox user info by ID
 router.get('/roblox/:userId', async (req, res) => {
@@ -81,7 +84,7 @@ router.get('/roblox/search/:username', async (req, res) => {
 });
 
 // Generate system prompt from description
-router.post('/generate-prompt', requireAuth, async (req, res) => {
+router.post('/generate-prompt', requireAuth, promptLimiter, async (req, res) => {
   try {
     const { description, robloxUsername, robloxDisplayName } = req.body;
 

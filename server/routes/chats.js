@@ -1,26 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
+const { rateLimit } = require('../middleware/ratelimit');
 const OpenAI = require('openai');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// Simple free-plan rate limiting: 30 messages / minute per user
-const messageRateLimit = new Map();
-function checkRateLimit(userId, limit = 30, windowMs = 60_000) {
-  const now = Date.now();
-  const entry = messageRateLimit.get(userId) || { timestamps: [] };
-  entry.timestamps = entry.timestamps.filter(ts => now - ts < windowMs);
-  if (entry.timestamps.length >= limit) {
-    messageRateLimit.set(userId, entry);
-    return false;
-  }
-  entry.timestamps.push(now);
-  messageRateLimit.set(userId, entry);
-  return true;
-}
+const messageLimiter = rateLimit({ key: 'messages', limit: 30, windowMs: 60_000 });
 
 // Get all user's chats
 router.get('/', requireAuth, async (req, res) => {
@@ -149,7 +137,7 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 // Send a message in a chat
-router.post('/:id/message', requireAuth, async (req, res) => {
+router.post('/:id/message', requireAuth, messageLimiter, async (req, res) => {
   try {
     const { id } = req.params;
     const { text, replyTo } = req.body;
@@ -159,10 +147,6 @@ router.post('/:id/message', requireAuth, async (req, res) => {
     }
 
     const supabase = req.app.locals.supabase;
-
-    if (!checkRateLimit(req.user.id)) {
-      return res.status(429).json({ error: 'Rate limit exceeded. Try again in a minute.' });
-    }
 
     // Get the chat with bot info
     const { data: chat, error: chatError } = await supabase
@@ -196,7 +180,8 @@ router.post('/:id/message', requireAuth, async (req, res) => {
     const conversation = [...(chat.conversation || [])];
 
     // Add user message to conversation
-    conversation.push({ role: 'user', content: text });
+    const userContent = replyTo ? `(replying to: ${replyTo})\n${text}` : text;
+    conversation.push({ role: 'user', content: userContent });
 
     // Call OpenAI
     try {

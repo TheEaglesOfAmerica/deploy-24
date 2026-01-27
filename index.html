@@ -47,6 +47,8 @@
           Continue with Google
         </button>
       </div>
+
+      <div class="login-hint" id="loginHint">You’ll be redirected to Google and back.</div>
     </div>
   </div>
 
@@ -159,6 +161,26 @@
       <div class="modal-body">
         <div class="marketplace-subtitle">Popular public bots</div>
         <div class="marketplace-list" id="marketplaceList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="tutorialModal">
+    <div class="modal-content tutorial-modal">
+      <div class="modal-header">
+        <h2>Quick Tour</h2>
+        <button class="modal-close" id="tutorialCloseBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <ol class="tutorial-steps">
+          <li><strong>Create bots</strong> from Roblox users and describe their vibe.</li>
+          <li><strong>Make bots public</strong> to list them in Marketplace.</li>
+          <li><strong>Reply + react</strong> by swiping or long-pressing messages.</li>
+        </ol>
+        <div class="tutorial-actions">
+          <button class="modal-btn secondary" id="tutorialMarketplaceBtn">Open Marketplace</button>
+          <button class="modal-btn primary" id="tutorialDoneBtn">Got it</button>
+        </div>
       </div>
     </div>
   </div>

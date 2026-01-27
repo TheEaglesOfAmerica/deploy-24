@@ -7,6 +7,8 @@ class ChatBotsClient {
     this.user = null;
     this.session = null;
     this.onAuthChange = null;
+    this.sessionCheckTimer = null;
+    this.refreshInFlight = false;
   }
 
   // Initialize Supabase client
@@ -18,13 +20,25 @@ class ChatBotsClient {
 
     this.supabase = window.supabase.createClient(
       CONFIG.SUPABASE_URL,
-      CONFIG.SUPABASE_ANON_KEY
+      CONFIG.SUPABASE_ANON_KEY,
+      {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true
+        }
+      }
     );
 
     // Set up auth state listener
     this.supabase.auth.onAuthStateChange((event, session) => {
       this.session = session;
       this.user = session?.user || null;
+      if (session) {
+        this.startSessionMonitor();
+      } else {
+        this.stopSessionMonitor();
+      }
 
       if (this.onAuthChange) {
         this.onAuthChange(event, session);
@@ -35,8 +49,45 @@ class ChatBotsClient {
     const { data: { session } } = await this.supabase.auth.getSession();
     this.session = session;
     this.user = session?.user || null;
+    if (session) {
+      this.startSessionMonitor();
+    }
 
     return this;
+  }
+
+  startSessionMonitor() {
+    this.stopSessionMonitor();
+    this.sessionCheckTimer = setInterval(async () => {
+      if (!this.session || this.refreshInFlight) return;
+      const expiresAtMs = (this.session.expires_at || 0) * 1000;
+      if (!expiresAtMs) return;
+      const now = Date.now();
+      if (now < expiresAtMs - 30_000) return;
+      this.refreshInFlight = true;
+      try {
+        const { data, error } = await this.supabase.auth.refreshSession();
+        if (error || !data?.session) {
+          await this.signOut();
+        } else {
+          this.session = data.session;
+          this.user = data.session.user;
+        }
+      } catch (e) {
+        try {
+          await this.signOut();
+        } catch (err) {}
+      } finally {
+        this.refreshInFlight = false;
+      }
+    }, 30_000);
+  }
+
+  stopSessionMonitor() {
+    if (this.sessionCheckTimer) {
+      clearInterval(this.sessionCheckTimer);
+      this.sessionCheckTimer = null;
+    }
   }
 
   // Load Supabase script dynamically
@@ -68,6 +119,7 @@ class ChatBotsClient {
   }
 
   async signOut() {
+    this.stopSessionMonitor();
     const { error } = await this.supabase.auth.signOut();
     if (error) throw error;
     this.user = null;

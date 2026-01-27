@@ -422,6 +422,18 @@ body.theme-transitioning .app-container {
   color: rgba(255, 255, 255, 0.4);
 }
 
+.login-btn.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.login-hint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  text-align: center;
+}
+
 .modal-checkbox {
   display: flex;
   align-items: center;
@@ -5773,4 +5785,28 @@ body.theme-custom.anim-gradient .gradient-bg {
 .my-bot-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.tutorial-modal {
+  max-width: 520px;
+}
+
+.tutorial-steps {
+  margin: 4px 0 18px 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.tutorial-steps li {
+  line-height: 1.4;
+}
+
+.tutorial-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }

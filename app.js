@@ -39,10 +39,15 @@ const marketplaceModal = document.getElementById('marketplaceModal');
 const closeMarketplaceModal = document.getElementById('closeMarketplaceModal');
 const marketplaceList = document.getElementById('marketplaceList');
 const marketplaceRefreshBtn = document.getElementById('marketplaceRefreshBtn');
+const tutorialModal = document.getElementById('tutorialModal');
+const tutorialCloseBtn = document.getElementById('tutorialCloseBtn');
+const tutorialDoneBtn = document.getElementById('tutorialDoneBtn');
+const tutorialMarketplaceBtn = document.getElementById('tutorialMarketplaceBtn');
 
 // New modal elements
 const loginScreen = document.getElementById('loginScreen');
 const googleLoginBtn = document.getElementById('googleLoginBtn');
+const loginHint = document.getElementById('loginHint');
 const totpSignupBtn = document.getElementById('totpSignupBtn');
 const totpModal = document.getElementById('totpModal');
 const closeTotpModal = document.getElementById('closeTotpModal');
@@ -74,6 +79,24 @@ console.log('DOM Elements:', {
 let isAuthenticated = false;
 let currentUser = null;
 let useSupabase = false; // Flag to switch between localStorage and Supabase
+let loginPending = false;
+const LOGIN_HINT_DEFAULT = 'You’ll be redirected to Google and back.';
+const TUTORIAL_KEY = 'imessage_tutorial_seen_v1';
+
+function setLoginHint(text) {
+  if (loginHint) {
+    loginHint.textContent = text || LOGIN_HINT_DEFAULT;
+  }
+}
+
+function resetLoginState() {
+  loginPending = false;
+  if (googleLoginBtn) {
+    googleLoginBtn.disabled = false;
+    googleLoginBtn.classList.remove('loading');
+  }
+  setLoginHint();
+}
 
 // Initialize Supabase client
 async function initSupabase() {
@@ -114,6 +137,8 @@ function showLoginScreen() {
   if (loginScreen) {
     loginScreen.classList.remove('hidden');
   }
+  closeSidebar();
+  resetLoginState();
 }
 
 function hideLoginScreen() {
@@ -128,13 +153,17 @@ async function handleAuthSuccess(user) {
   currentUser = user;
   useSupabase = true;
 
+  resetLoginState();
   hideLoginScreen();
+  closeSidebar();
 
   // Load chats from Supabase
   await loadChatsFromSupabase();
 
   // Setup user menu in sidebar
   setupUserMenu();
+
+  maybeShowTutorial();
 }
 
 function handleSignOut() {
@@ -144,6 +173,7 @@ function handleSignOut() {
   state.chats = {};
   state.currentChatId = null;
 
+  resetLoginState();
   showLoginScreen();
   renderChatList();
 }
@@ -265,6 +295,13 @@ async function ensureSupportChat() {
   } catch (err) {
     console.log('Support chat creation handled:', err.message);
   }
+}
+
+function maybeShowTutorial() {
+  if (!tutorialModal) return;
+  if (localStorage.getItem(TUTORIAL_KEY)) return;
+  localStorage.setItem(TUTORIAL_KEY, '1');
+  openModal(tutorialModal);
 }
 
 async function loadMyBots() {
@@ -482,10 +519,20 @@ async function completeTotpSignup() {
 function setupModals() {
   // Login buttons
   googleLoginBtn?.addEventListener('click', async () => {
+    if (loginPending) return;
+    loginPending = true;
+    closeSidebar();
+    if (googleLoginBtn) {
+      googleLoginBtn.disabled = true;
+      googleLoginBtn.classList.add('loading');
+    }
+    setLoginHint('Opening Google…');
     try {
       await window.essx.signInWithGoogle();
     } catch (err) {
       console.error('Google sign in failed:', err);
+      resetLoginState();
+      alert('Sign-in failed. Please try again.');
     }
   });
 
@@ -1600,6 +1647,13 @@ marketplaceBtn?.addEventListener('click', async () => {
 });
 closeMarketplaceModal?.addEventListener('click', () => closeModal(marketplaceModal));
 marketplaceRefreshBtn?.addEventListener('click', loadMarketplace);
+tutorialCloseBtn?.addEventListener('click', () => closeModal(tutorialModal));
+tutorialDoneBtn?.addEventListener('click', () => closeModal(tutorialModal));
+tutorialMarketplaceBtn?.addEventListener('click', async () => {
+  closeModal(tutorialModal);
+  await loadMarketplace();
+  openModal(marketplaceModal);
+});
 
 if (newChatBtn) {
   console.log('🎯 NEW CHAT BTN FOUND, attaching listener');
@@ -1978,11 +2032,14 @@ async function sendMessageSupabase(text) {
     return;
   }
 
+  const replyTo = state.replyingTo;
+
   // Add user message to UI immediately
   const userMsg = {
     type: 'sent',
     text: text,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    replyTo: replyTo || null
   };
 
   chat.messages.push(userMsg);
@@ -1999,11 +2056,18 @@ async function sendMessageSupabase(text) {
 
   try {
     // Send message via Supabase API
-    const response = await window.essx.sendMessage(chat.id, text, state.replyingTo);
+    const response = await window.essx.sendMessage(chat.id, text, replyTo);
 
     hideTyping();
 
     if (response.assistantMessage) {
+      if (response.userMessage) {
+        chat.messages[userMsgIndex] = {
+          ...chat.messages[userMsgIndex],
+          ...response.userMessage
+        };
+      }
+
       // Update read receipt on the user's last message
       if (response.userMessage?.readAt) {
         chat.messages[userMsgIndex].readAt = response.userMessage.readAt;
@@ -2021,9 +2085,6 @@ async function sendMessageSupabase(text) {
       await displayResponseChunked(response.assistantMessage.text, chat);
     }
 
-    state.replyingTo = null;
-    replyPreview?.classList.remove('active');
-
   } catch (error) {
     console.error('Send error:', error);
     hideTyping();
@@ -2036,6 +2097,9 @@ async function sendMessageSupabase(text) {
 
     chat.messages.push(errorMsg);
     addMessageToDOM(errorMsg, chat.messages.length - 1, true);
+  } finally {
+    state.replyingTo = null;
+    replyPreview?.classList.remove('active');
   }
 
   state.isSending = false;
