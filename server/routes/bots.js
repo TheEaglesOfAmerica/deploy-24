@@ -117,17 +117,19 @@ router.get('/', requireAuth, async (req, res) => {
           description: bot.description,
           systemPrompt: bot.system_prompt
         });
-        await supabase
+        const { error: updateError } = await supabase
           .from('bots')
           .update({
             approved: moderation.approved,
             rejected: moderation.rejected,
             rejection_reason: moderation.rejectionReason,
             is_public: moderation.approved ? !!bot.is_public : false,
-            moderated_at: new Date().toISOString(),
-            moderated_by: req.user.id
+            moderated_at: new Date().toISOString()
           })
           .eq('id', bot.id);
+        if (updateError) {
+          console.error('Auto-moderation update failed for bot:', bot.id, updateError);
+        }
       }));
 
       const { data: refreshed } = await supabase
@@ -209,8 +211,7 @@ router.post('/', requireAuth, async (req, res) => {
         approved: moderation.approved,
         rejected: moderation.rejected,
         rejection_reason: moderation.rejectionReason,
-        moderated_at: new Date().toISOString(),
-        moderated_by: req.user.id
+        moderated_at: new Date().toISOString()
       })
       .select()
       .single();
