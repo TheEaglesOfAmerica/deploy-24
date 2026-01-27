@@ -7,8 +7,72 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeTextForMatch(text) {
+  const lowered = (text || '').toLowerCase();
+  const leetspeak = lowered
+    .replace(/0/g, 'o')
+    .replace(/1/g, 'i')
+    .replace(/3/g, 'e')
+    .replace(/4/g, 'a')
+    .replace(/5/g, 's')
+    .replace(/7/g, 't')
+    .replace(/8/g, 'b');
+  const spaced = leetspeak.replace(/[^a-z0-9]+/g, ' ').trim();
+  const compact = spaced.replace(/[^a-z0-9]/g, '');
+  return { spaced, compact };
+}
+
+function containsMarketplaceProfanity(text) {
+  const { spaced, compact } = normalizeTextForMatch(text);
+
+  // "Marketplace strict": block common swear words + slurs (covers spacing/punctuation/leetspeak).
+  const terms = [
+    'fuck',
+    'shit',
+    'bitch',
+    'asshole',
+    'cunt',
+    'dick',
+    'pussy',
+    'slut',
+    'whore',
+    'bastard',
+    'motherfucker',
+    'retard',
+    'nigger',
+    'nigga',
+    'faggot'
+  ];
+
+  for (const term of terms) {
+    const spacedRe = new RegExp(`\\b${escapeRegExp(term)}\\b`, 'i');
+    if (spacedRe.test(spaced)) return term;
+
+    // Also match compacted variants for longer terms (avoid false positives like "class" -> "ass")
+    if (term.length >= 4) {
+      const termCompact = normalizeTextForMatch(term).compact;
+      if (termCompact && compact.includes(termCompact)) return term;
+    }
+  }
+
+  return null;
+}
+
 async function moderateBotContent({ name, description, systemPrompt }) {
   const input = `${name || ''}\n${description || ''}\n${systemPrompt || ''}`.trim();
+
+  const profanityHit = containsMarketplaceProfanity(input);
+  if (profanityHit) {
+    return {
+      approved: false,
+      rejected: true,
+      rejectionReason: 'Marketplace prohibits profanity'
+    };
+  }
 
   if (!process.env.OPENAI_API_KEY) {
     return {

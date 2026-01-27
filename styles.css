@@ -1525,8 +1525,8 @@ body.theme-transitioning .app-container {
 }
 
 .contact-avatar {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: linear-gradient(135deg, #5856D6 0%, #AF52DE 100%);
   display: flex;
@@ -1552,7 +1552,7 @@ body.theme-transitioning .app-container {
 }
 
 .contact-name {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: -0.06px;
@@ -2930,8 +2930,8 @@ body.theme-transitioning .app-container {
 }
 
 .contact-modal-close-icon svg {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
 }
 
 .contact-modal-backdrop.active .contact-modal {
@@ -5880,6 +5880,164 @@ body.theme-custom.anim-gradient .gradient-bg {
 .marketplace-search-input:focus {
   border-color: var(--imessage-blue);
   box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+}
+
+.marketplace-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.marketplace-sort {
+  display: inline-flex;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--imessage-input-bg);
+  border: 1px solid var(--separator);
+}
+
+.marketplace-sort-btn {
+  border: none;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.marketplace-sort-btn.active {
+  background: rgba(0, 122, 255, 0.15);
+  color: var(--imessage-blue);
+}
+
+.marketplace-random-btn {
+  border: 1px solid var(--separator);
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--imessage-input-bg);
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.marketplace-random-btn:hover {
+  background: rgba(0, 122, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+.marketplace-featured {
+  margin: 16px 0;
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x mandatory;
+}
+
+.marketplace-featured-card {
+  flex: 0 0 auto;
+  width: 280px;
+  border-radius: 16px;
+  background: var(--imessage-bg);
+  border: 1px solid var(--separator);
+  padding: 14px;
+  cursor: pointer;
+  scroll-snap-align: start;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.marketplace-featured-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--imessage-blue);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.10);
+}
+
+.marketplace-featured-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.marketplace-featured-badge {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 204, 0, 0.18);
+  color: #FFCC00;
+}
+
+.marketplace-featured-body {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.marketplace-featured-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  object-fit: cover;
+  border: 1px solid var(--separator);
+}
+
+.marketplace-featured-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.marketplace-featured-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.marketplace-featured-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.marketplace-featured-stat {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.marketplace-featured-btn {
+  border: none;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(0, 122, 255, 0.16);
+  color: var(--imessage-blue);
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.marketplace-featured-btn:hover {
+  background: rgba(0, 122, 255, 0.22);
 }
 
 .marketplace-grid {

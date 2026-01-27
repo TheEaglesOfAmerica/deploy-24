@@ -74,6 +74,74 @@ let isAuthenticated = false;
 let currentUser = null;
 let useSupabase = false; // Flag to switch between localStorage and Supabase
 let botSettingsBot = null;
+const PENDING_SHARE_CODE_KEY = 'spunnie_pending_share_code';
+
+function getShareCodeFromUrl() {
+  try {
+    const pathMatch = window.location.pathname.match(/^\/b\/([A-Za-z0-9]{4})$/);
+    const qs = new URLSearchParams(window.location.search);
+    const fromQuery = qs.get('b');
+    const code = (fromQuery || pathMatch?.[1] || '').toString().trim();
+    if (!code) return null;
+    const normalized = code.replace(/[^a-z0-9]/gi, '').toUpperCase();
+    if (!/^[A-Z0-9]{4}$/.test(normalized)) return null;
+    return normalized;
+  } catch {
+    return null;
+  }
+}
+
+function stashShareCode(code) {
+  if (!code) return;
+  try { localStorage.setItem(PENDING_SHARE_CODE_KEY, code); } catch {}
+}
+
+function consumeStashedShareCode() {
+  try {
+    const code = localStorage.getItem(PENDING_SHARE_CODE_KEY);
+    if (code) localStorage.removeItem(PENDING_SHARE_CODE_KEY);
+    return code;
+  } catch {
+    return null;
+  }
+}
+
+async function tryOpenShareCode(code) {
+  if (!code) return;
+
+  // Clean URL so refresh doesn't re-trigger
+  try {
+    if (window.location.search.includes('b=')) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('b');
+      window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    }
+    if (window.location.pathname.startsWith('/b/')) {
+      window.history.replaceState({}, '', '/');
+    }
+  } catch {}
+
+  stashShareCode(code);
+
+  if (!useSupabase || !window.essx?.isLoggedIn?.()) {
+    showLoginScreen();
+    return;
+  }
+
+  const pending = consumeStashedShareCode();
+  if (!pending) return;
+
+  try {
+    const bot = await window.essx.getBotByCode(pending);
+    if (bot?.id) {
+      await addBotFromMarketplace(bot.id);
+      showToast(`Added bot ${pending}`, 'success');
+    }
+  } catch (err) {
+    console.error('Failed to open share code:', err);
+    showToast('Invalid or unavailable bot code', 'error');
+  }
+}
 
 // Initialize Supabase client
 async function initSupabase() {
@@ -84,6 +152,12 @@ async function initSupabase() {
     }
 
     await window.essx.init();
+
+    // Capture share links early (works even if already logged in)
+    const incomingShareCode = getShareCodeFromUrl();
+    if (incomingShareCode) {
+      stashShareCode(incomingShareCode);
+    }
 
     // Set up auth change listener
     window.essx.onAuthChange = (event, session) => {
@@ -135,6 +209,9 @@ async function handleAuthSuccess(user) {
 
   // Setup user menu in sidebar
   setupUserMenu();
+
+  // If user arrived via share link, open it now
+  await tryOpenShareCode(consumeStashedShareCode());
 
   // Show moderate tab if user is admin
   const moderateTab = document.getElementById('moderateTab');
@@ -500,20 +577,64 @@ function renderMyBots(bots) {
 
 async function loadMarketplace() {
   const marketplaceGrid = document.getElementById('marketplaceGrid');
+  const featuredEl = document.getElementById('marketplaceFeatured');
+  const searchInputEl = document.getElementById('marketplaceSearch');
 
   if (!marketplaceGrid) return;
 
   try {
-    // Get approved bots from API
-    const response = await window.essx.api('/marketplace');
-    const bots = Array.isArray(response) ? response : (response.bots || []);
+    const query = (searchInputEl?.value || '').trim();
+    const sort = window.__marketplaceSort || 'popular';
+
+    let featured = [];
+    let bots = [];
+
+    if (query) {
+      const response = await window.essx.api(`/marketplace/search?q=${encodeURIComponent(query)}`);
+      bots = response?.bots || [];
+      featured = [];
+    } else {
+      const response = await window.essx.api(`/marketplace?sort=${encodeURIComponent(sort)}`);
+      featured = response?.featured || [];
+      bots = response?.bots || [];
+    }
+
+    window.__marketplaceLastBots = [...featured, ...bots];
+
+    if (featuredEl) {
+      if (featured.length === 0 || query) {
+        featuredEl.style.display = 'none';
+        featuredEl.innerHTML = '';
+      } else {
+        featuredEl.style.display = 'flex';
+        featuredEl.innerHTML = featured.map(bot => `
+          <div class="marketplace-featured-card" onclick="openBotFromMarketplace('${bot.id}')">
+            <div class="marketplace-featured-top">
+              <span class="marketplace-featured-badge">Featured</span>
+              <span class="marketplace-featured-stat">${bot.chat_count || 0} chats</span>
+            </div>
+            <div class="marketplace-featured-body">
+              <img class="marketplace-featured-avatar" src="${bot.roblox_avatar_url || 'https://via.placeholder.com/56'}" alt="${bot.name}">
+              <div style="min-width:0;">
+                <div class="marketplace-featured-name">${bot.name}</div>
+                <div class="marketplace-featured-desc">${bot.description || 'No description'}</div>
+              </div>
+            </div>
+            <div class="marketplace-featured-footer">
+              <div class="marketplace-featured-stat">@${bot.roblox_username || 'unknown'}</div>
+              <button class="marketplace-featured-btn" onclick="event.stopPropagation(); addBotFromMarketplace('${bot.id}')">Add</button>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
 
     if (bots.length === 0) {
       marketplaceGrid.innerHTML = `
         <div class="marketplace-empty">
           <div class="marketplace-empty-icon">🏪</div>
-          <div class="marketplace-empty-text">No bots available yet</div>
-          <div class="marketplace-empty-subtext">Be the first to create one!</div>
+          <div class="marketplace-empty-text">${query ? 'No results' : 'No bots available yet'}</div>
+          <div class="marketplace-empty-subtext">${query ? 'Try a different search.' : 'Be the first to create one!'}</div>
         </div>
       `;
       return;
@@ -556,6 +677,47 @@ async function loadMarketplace() {
       </div>
     `;
   }
+}
+
+function setMarketplaceSort(sort) {
+  window.__marketplaceSort = sort;
+  const popularBtn = document.getElementById('marketplaceSortPopular');
+  const newBtn = document.getElementById('marketplaceSortNew');
+  if (popularBtn) popularBtn.classList.toggle('active', sort === 'popular');
+  if (newBtn) newBtn.classList.toggle('active', sort === 'new');
+}
+
+function setupMarketplaceControls() {
+  const search = document.getElementById('marketplaceSearch');
+  const popularBtn = document.getElementById('marketplaceSortPopular');
+  const newBtn = document.getElementById('marketplaceSortNew');
+  const randomBtn = document.getElementById('marketplaceRandomBtn');
+
+  if (search && !search.dataset.bound) {
+    search.dataset.bound = '1';
+    let t;
+    search.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(() => loadMarketplace(), 250);
+    });
+  }
+
+  popularBtn?.addEventListener('click', () => {
+    setMarketplaceSort('popular');
+    loadMarketplace();
+  });
+
+  newBtn?.addEventListener('click', () => {
+    setMarketplaceSort('new');
+    loadMarketplace();
+  });
+
+  randomBtn?.addEventListener('click', () => {
+    const list = window.__marketplaceLastBots || [];
+    if (!list.length) return;
+    const pick = list[Math.floor(Math.random() * list.length)];
+    if (pick?.id) openBotFromMarketplace(pick.id);
+  });
 }
 
 async function addBotFromMarketplace(botId) {
@@ -987,6 +1149,7 @@ function setButtonLoading(button, isLoading) {
 function setupModals() {
   // Sidebar Tabs Navigation
   setupSidebarTabs();
+  setupMarketplaceControls();
 
   // Login buttons
   googleLoginBtn?.addEventListener('click', async () => {
@@ -1960,6 +2123,10 @@ function updateHeader() {
       avatarImg.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#007AFF"/><text x="50" y="65" font-size="40" fill="white" text-anchor="middle">?</text></svg>');
     } else if (chat.avatarUrl) {
       avatarImg.src = chat.avatarUrl;
+    } else {
+      const initial = (chat.name || 'B').trim().charAt(0).toUpperCase();
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5856D6"/><stop offset="1" stop-color="#AF52DE"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#g)"/><text x="50" y="65" font-size="44" fill="white" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700">${initial}</text></svg>`;
+      avatarImg.src = 'data:image/svg+xml,' + encodeURIComponent(svg);
     }
     // Otherwise keep the default avatar that was loaded
   }
@@ -1991,16 +2158,14 @@ function renderChatList() {
     const active = chat.id === state.currentChatId;
     const isSupport = chat.isSupport || chat.shareCode === 'HELP';
 
-    // Determine avatar source
+    // Determine avatar source (never reuse current header avatar; it can be stale)
     let avatarContent;
     if (isSupport) {
-      avatarContent = '?'; // Question mark for support
+      avatarContent = '?';
     } else if (chat.avatarUrl) {
       avatarContent = `<img src="${chat.avatarUrl}" alt="${chat.name}">`;
-    } else if (avatarImg?.src) {
-      avatarContent = `<img src="${avatarImg.src}">`;
     } else {
-      avatarContent = chat.name?.charAt(0).toUpperCase() || 'E';
+      avatarContent = (chat.name?.charAt(0).toUpperCase() || 'B');
     }
 
     return `
@@ -2161,50 +2326,7 @@ function closeSidebar() {
 menuBtn?.addEventListener('click', openSidebar);
 sidebarBackdrop?.addEventListener('click', closeSidebar);
 
-if (newChatBtn) {
-  console.log('🎯 NEW CHAT BTN FOUND, attaching listener');
-  newChatBtn.addEventListener('click', function(e) {
-    console.log('🔵 NEW CHAT BUTTON CLICKED - Event fired!');
-    e.preventDefault();
-
-    try {
-      // Fade out current chat area smoothly
-      chatArea?.classList.add('switching');
-
-      setTimeout(() => {
-        const newId = createChat();
-        console.log('✅ New chat created:', newId);
-
-        state.currentChatId = newId;
-        saveState();
-
-        renderChatList();
-
-        if (chatArea) {
-          chatArea.innerHTML = '';
-        }
-
-        closeSidebar();
-
-        // Fade back in
-        requestAnimationFrame(() => {
-          chatArea?.classList.remove('switching');
-        });
-
-        setTimeout(() => {
-          console.log('⏱️ Greeting starting');
-          greet();
-        }, 100);
-      }, 150);
-
-    } catch (e) {
-      console.error('❌ Error:', e);
-    }
-  });
-  console.log('✅ New chat button listener attached');
-} else {
-  console.error('❌ NEW CHAT BTN NOT FOUND!');
-}
+// NOTE: new chat button is wired in setupModals() so it respects Supabase mode.
 
 // ============================================================
 // Messages
@@ -2487,6 +2609,7 @@ async function sendMessageSupabase(text) {
   updateChatPreview(state.currentChatId);
   scrollToBottom();
   autoResizeTextarea();
+  updateCharCounter();
 
   showTyping();
 
@@ -2506,12 +2629,10 @@ async function sendMessageSupabase(text) {
         }
       }
 
-      // Add assistant message to local state
+      // Add assistant message to local state + render it (single bubble)
       chat.messages.push(response.assistantMessage);
       chat.conversation = response.conversation || chat.conversation;
-
-      // Display the response with chunking for natural feel
-      await displayResponseChunked(response.assistantMessage.text, chat);
+      addMessageToDOM(response.assistantMessage, chat.messages.length - 1, true);
     }
 
   } catch (error) {
@@ -2637,6 +2758,7 @@ async function sendMessage() {
   chat.conversation.push({ role: 'user', content: text });
 
   chatInput.value = '';
+  updateCharCounter();
   state.replyingTo = null;
   replyPreview?.classList.remove('active');
 
@@ -3196,31 +3318,18 @@ async function processAssistantMessage(text, chat, skipTools = false) {
     }
   }
 
-  // Chunk the message into natural breaks (sentences, periods, etc)
-  const chunks = chunkMessage(cleanText);
-
   chat.conversation.push({ role: 'assistant', content: text });
 
-  // Send chunks with delays between them (skip if no actual text after cleaning)
+  // Render as a single message bubble (chunking was causing weird splits)
   if (cleanText.trim()) {
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      if (!chunk.trim()) continue; // Skip empty chunks
+    const assistantMsg = {
+      type: 'received',
+      text: cleanText,
+      timestamp: Date.now()
+    };
 
-      const assistantMsg = {
-        type: 'received',
-        text: chunk,
-        timestamp: Date.now()
-      };
-
-      chat.messages.push(assistantMsg);
-      addMessageToDOM(assistantMsg, chat.messages.length - 1, true);
-
-      // Wait before sending next chunk (except on last one)
-      if (i < chunks.length - 1) {
-        await new Promise(r => setTimeout(r, 300 + Math.random() * 200));
-      }
-    }
+    chat.messages.push(assistantMsg);
+    addMessageToDOM(assistantMsg, chat.messages.length - 1, true);
   }
 
   chat.updatedAt = Date.now();
@@ -3451,7 +3560,7 @@ function updateCharCounter() {
   const max = 300;
 
   if (len === 0) {
-    charCounter.textContent = '';
+    charCounter.textContent = `0/${max}`;
     charCounter.className = 'char-counter';
   } else if (len > max * 0.9) {
     charCounter.textContent = `${len}/${max}`;
