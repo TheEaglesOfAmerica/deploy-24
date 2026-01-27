@@ -9,11 +9,24 @@ class ChatBotsClient {
     this.onAuthChange = null;
   }
 
+  async ensureInitialized() {
+    if (this.supabase) return;
+    await this.init();
+  }
+
   // Initialize Supabase client
   async init() {
+    if (typeof CONFIG === 'undefined' || !CONFIG?.SUPABASE_URL || !CONFIG?.SUPABASE_ANON_KEY) {
+      throw new Error('Missing Supabase configuration (SUPABASE_URL / SUPABASE_ANON_KEY)');
+    }
+
     // Load Supabase from CDN if not already loaded
     if (!window.supabase) {
       await this.loadSupabaseScript();
+    }
+
+    if (!window.supabase?.createClient) {
+      throw new Error('Failed to load Supabase client library');
     }
 
     this.supabase = window.supabase.createClient(
@@ -57,10 +70,11 @@ class ChatBotsClient {
 
   // Auth methods
   async signInWithGoogle() {
+    await this.ensureInitialized();
     const { data, error} = await this.supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin
+        redirectTo: (window.CONFIG?.APP_URL || window.location.origin)
       }
     });
     if (error) throw error;
@@ -68,10 +82,11 @@ class ChatBotsClient {
   }
 
   async signInWithDiscord() {
+    await this.ensureInitialized();
     const { data, error } = await this.supabase.auth.signInWithOAuth({
       provider: 'discord',
       options: {
-        redirectTo: window.location.origin
+        redirectTo: (window.CONFIG?.APP_URL || window.location.origin)
       }
     });
     if (error) throw error;
@@ -79,6 +94,7 @@ class ChatBotsClient {
   }
 
   async signOut() {
+    await this.ensureInitialized();
     const { error } = await this.supabase.auth.signOut();
     if (error) throw error;
     this.user = null;
@@ -95,6 +111,9 @@ class ChatBotsClient {
 
   // API helper with auth
   async api(endpoint, options = {}) {
+    if (typeof CONFIG === 'undefined' || !CONFIG?.API_URL) {
+      throw new Error('Missing API_URL configuration');
+    }
     const url = `${CONFIG.API_URL}${endpoint}`;
     const headers = {
       'Content-Type': 'application/json',

@@ -1352,8 +1352,9 @@ function setupModals() {
     const methodButtons = {
       'google': googleLoginBtn,
       'discord': discordBtn,
-      'passkey': passkeyLoginBtn,
-      'authenticator': authenticatorLoginBtn
+      // Look up these buttons at call time to avoid TDZ (they're declared later)
+      'passkey': document.getElementById('passkeyLoginBtn'),
+      'authenticator': document.getElementById('authenticatorLoginBtn')
     };
 
     // Remove any existing badges first
@@ -1438,7 +1439,7 @@ function setupModals() {
     const code = authenticatorCode?.value.trim();
 
     if (!code || code.length !== 6) {
-      alert('Please enter the 6-digit code');
+      showToast('Please enter the 6-digit code', 'error');
       return;
     }
 
