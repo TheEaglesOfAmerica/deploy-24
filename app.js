@@ -453,6 +453,11 @@ async function loadMarketplace() {
           </div>
         </div>
         <div class="marketplace-card-description">${bot.description || 'No description'}</div>
+        ${bot.profiles ? `
+          <div class="marketplace-card-creator">
+            Created by <strong>${bot.profiles.display_name || 'Unknown'}</strong>
+          </div>
+        ` : ''}
         <div class="marketplace-card-footer">
           <div class="marketplace-card-stats">
             <div class="marketplace-card-stat">
@@ -645,7 +650,11 @@ async function loadModeration() {
           </div>
         </div>
         <p class="mod-bot-description">${bot.description || 'No description provided'}</p>
+        <div class="mod-ai-review" id="aiReview_${bot.id}" style="display: none;"></div>
         <div class="mod-bot-actions">
+          <button class="mod-action-btn mod-ai-btn" onclick="runAIReview('${bot.id}')">
+            AI Review
+          </button>
           <button class="mod-action-btn mod-approve-btn" onclick="approveBot('${bot.id}')">
             Approve
           </button>
@@ -731,6 +740,56 @@ Bot Details:
   } catch (err) {
     console.error('Failed to view bot details:', err);
     alert('Failed to load bot details');
+  }
+}
+
+async function runAIReview(botId) {
+  const reviewContainer = document.getElementById(`aiReview_${botId}`);
+  if (!reviewContainer) return;
+
+  // Show loading state
+  reviewContainer.style.display = 'block';
+  reviewContainer.innerHTML = `
+    <div class="mod-ai-loading">
+      <div class="spinner"></div>
+      Running AI review...
+    </div>
+  `;
+
+  try {
+    const response = await window.essx.api(`/moderation/${botId}/ai-review`, {
+      method: 'POST'
+    });
+
+    const review = response.review;
+    const isApprove = review.recommendation === 'approve';
+
+    reviewContainer.innerHTML = `
+      <div class="mod-ai-result ${isApprove ? 'recommend-approve' : 'recommend-reject'}">
+        <div class="mod-ai-header">
+          <strong>AI Recommendation:</strong> ${isApprove ? '✅ Approve' : '❌ Reject'}
+          <span class="mod-ai-confidence">(${Math.round(review.confidence * 100)}% confident)</span>
+        </div>
+        <div class="mod-ai-reasoning">
+          <strong>Reasoning:</strong> ${review.reasoning || 'No reasoning provided'}
+        </div>
+        ${review.concerns && review.concerns.length > 0 ? `
+          <div class="mod-ai-concerns">
+            <strong>Concerns:</strong>
+            <ul>
+              ${review.concerns.map(concern => `<li>${concern}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  } catch (err) {
+    console.error('Failed to run AI review:', err);
+    reviewContainer.innerHTML = `
+      <div class="mod-ai-result mod-ai-error">
+        Failed to run AI review: ${err.message}
+      </div>
+    `;
   }
 }
 
@@ -862,6 +921,78 @@ function setupModals() {
     closeModal(myBotsModal);
     openModal(createBotModal);
     resetWizard();
+  });
+
+  // Edit profile modal
+  const profileEditBtn = document.getElementById('profileEditBtn');
+  const editProfileModal = document.getElementById('editProfileModal');
+  const closeEditProfile = document.getElementById('closeEditProfile');
+  const cancelEditProfile = document.getElementById('cancelEditProfile');
+  const saveProfile = document.getElementById('saveProfile');
+
+  profileEditBtn?.addEventListener('click', () => {
+    if (!currentUser) return;
+
+    // Populate form with current data
+    const editDisplayName = document.getElementById('editDisplayName');
+    const editAvatarUrl = document.getElementById('editAvatarUrl');
+
+    if (editDisplayName) {
+      editDisplayName.value = currentUser.user_metadata?.full_name || '';
+    }
+
+    if (editAvatarUrl) {
+      editAvatarUrl.value = currentUser.user_metadata?.avatar_url || '';
+    }
+
+    editProfileModal.style.display = 'flex';
+  });
+
+  closeEditProfile?.addEventListener('click', () => {
+    editProfileModal.style.display = 'none';
+  });
+
+  cancelEditProfile?.addEventListener('click', () => {
+    editProfileModal.style.display = 'none';
+  });
+
+  saveProfile?.addEventListener('click', async () => {
+    const editDisplayName = document.getElementById('editDisplayName');
+    const editAvatarUrl = document.getElementById('editAvatarUrl');
+
+    const displayName = editDisplayName?.value.trim();
+    const avatarUrl = editAvatarUrl?.value.trim();
+
+    try {
+      // Update user metadata via Supabase
+      const { data, error } = await window.essx.supabase.auth.updateUser({
+        data: {
+          full_name: displayName || undefined,
+          avatar_url: avatarUrl || undefined
+        }
+      });
+
+      if (error) throw error;
+
+      // Update current user object
+      currentUser = data.user;
+
+      // Reload profile view
+      loadProfile();
+
+      editProfileModal.style.display = 'none';
+      alert('Profile updated successfully!');
+    } catch (err) {
+      console.error('Failed to update profile:', err);
+      alert('Failed to update profile: ' + err.message);
+    }
+  });
+
+  // Close modal on backdrop click
+  editProfileModal?.addEventListener('click', (e) => {
+    if (e.target === editProfileModal) {
+      editProfileModal.style.display = 'none';
+    }
   });
 
   // Update new chat button to open add bot modal
@@ -3450,6 +3581,34 @@ if (document.readyState === 'loading') {
 // ============================================================
 
 headerCenter?.addEventListener('click', () => {
+  // Get current chat
+  const currentChat = state.chats[state.currentChatId];
+  if (!currentChat) return;
+
+  // Update modal with current chat info
+  const modalAvatar = document.getElementById('modalAvatar');
+  const modalName = document.getElementById('modalName');
+  const modalUsername = document.getElementById('modalUsername');
+  const modalBio = document.getElementById('modalBio');
+
+  if (modalAvatar && currentChat.avatarUrl) {
+    modalAvatar.innerHTML = `<img src="${currentChat.avatarUrl}" alt="${currentChat.name}">`;
+  } else if (modalAvatar) {
+    modalAvatar.textContent = (currentChat.name || 'B')[0].toUpperCase();
+  }
+
+  if (modalName) {
+    modalName.textContent = currentChat.name || 'Bot';
+  }
+
+  if (modalUsername) {
+    modalUsername.textContent = '@' + (currentChat.name || 'bot').toLowerCase().replace(/\s+/g, '');
+  }
+
+  if (modalBio) {
+    modalBio.textContent = currentChat.description || 'just vibin';
+  }
+
   contactModal?.classList.add('active');
 });
 

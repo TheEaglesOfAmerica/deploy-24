@@ -1,6 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
+const OpenAI = require('openai');
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 // Middleware to check if user is admin
 async function requireAdmin(req, res, next) {
@@ -117,6 +122,67 @@ router.get('/stats', requireAuth, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('Get moderation stats error:', err);
     res.status(500).json({ error: 'Failed to get stats' });
+  }
+});
+
+// AI-powered bot review
+router.post('/:id/ai-review', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const supabase = req.app.locals.supabase;
+
+    // Get bot details
+    const { data: bot, error } = await supabase
+      .from('bots')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !bot) {
+      return res.status(404).json({ error: 'Bot not found' });
+    }
+
+    // Prepare content for AI review
+    const reviewPrompt = `You are a content moderator for a chatbot platform. Review this bot submission and determine if it should be approved or rejected.
+
+Bot Details:
+- Name: ${bot.name}
+- Roblox Username: ${bot.roblox_username || 'N/A'}
+- Description: ${bot.description || 'No description provided'}
+- System Prompt: ${bot.system_prompt}
+
+Guidelines for approval:
+1. No explicit sexual content, violence, or harmful behavior
+2. No impersonation of real people (except Roblox characters)
+3. No promotion of illegal activities
+4. No hate speech or discrimination
+5. Bot should be appropriate for general audiences
+6. System prompt should be clear and reasonable
+
+Respond in JSON format with:
+{
+  "recommendation": "approve" or "reject",
+  "confidence": 0.0 to 1.0,
+  "reasoning": "brief explanation",
+  "concerns": ["list", "of", "specific", "concerns"] or []
+}`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: reviewPrompt }],
+      response_format: { type: 'json_object' },
+      temperature: 0.3
+    });
+
+    const review = JSON.parse(completion.choices[0]?.message?.content || '{}');
+
+    res.json({
+      bot_id: id,
+      review
+    });
+  } catch (err) {
+    console.error('AI review error:', err);
+    res.status(500).json({ error: 'Failed to perform AI review' });
   }
 });
 

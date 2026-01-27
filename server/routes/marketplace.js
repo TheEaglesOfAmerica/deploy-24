@@ -9,7 +9,22 @@ router.get('/', optionalAuth, async (req, res) => {
 
     const { data: bots, error } = await supabase
       .from('bots')
-      .select('id, share_code, roblox_user_id, roblox_username, roblox_avatar_url, name, description, chat_count, created_at')
+      .select(`
+        id,
+        share_code,
+        roblox_user_id,
+        roblox_username,
+        roblox_avatar_url,
+        name,
+        description,
+        chat_count,
+        created_at,
+        profiles:creator_id (
+          id,
+          display_name,
+          avatar_url
+        )
+      `)
       .eq('approved', true)
       .eq('is_public', true)
       .order('chat_count', { ascending: false })
@@ -35,7 +50,21 @@ router.get('/search', optionalAuth, async (req, res) => {
 
     const { data: bots, error } = await supabase
       .from('bots')
-      .select('id, share_code, roblox_user_id, roblox_username, roblox_avatar_url, name, description, chat_count')
+      .select(`
+        id,
+        share_code,
+        roblox_user_id,
+        roblox_username,
+        roblox_avatar_url,
+        name,
+        description,
+        chat_count,
+        profiles:creator_id (
+          id,
+          display_name,
+          avatar_url
+        )
+      `)
       .eq('approved', true)
       .eq('is_public', true)
       .or(`name.ilike.%${q}%,roblox_username.ilike.%${q}%,description.ilike.%${q}%`)
