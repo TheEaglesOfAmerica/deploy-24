@@ -60,6 +60,13 @@ async function moderateBotContent({ name, description, systemPrompt }) {
   }
 }
 
+function normalizeModerationDecision(moderationResult) {
+  const approved = moderationResult.approved === true ? true : (moderationResult.rejected === true ? false : null);
+  const rejected = moderationResult.rejected === true ? true : (moderationResult.approved === true ? false : null);
+  const rejectionReason = moderationResult.rejectionReason || null;
+  return { approved, rejected, rejectionReason };
+}
+
 function buildModerationStatus(bot) {
   if (bot.approved === true) {
     return {
@@ -185,18 +192,17 @@ router.get('/', requireAuth, async (req, res) => {
     if (pendingBots.length > 0) {
       await Promise.all(pendingBots.map(async (bot) => {
         const moderation = await moderateBotContent({
-          name: bot.name,
+          name: `${bot.name || ''} ${bot.roblox_username || ''}`.trim(),
           description: bot.description,
           systemPrompt: bot.system_prompt
         });
-        const approved = moderation.approved === true ? true : (moderation.rejected === true ? false : null);
-        const rejected = moderation.rejected === true ? true : (moderation.approved === true ? false : null);
+        const { approved, rejected, rejectionReason } = normalizeModerationDecision(moderation);
         const { error: updateError } = await supabase
           .from('bots')
           .update({
             approved,
             rejected,
-            rejection_reason: moderation.rejectionReason || null,
+            rejection_reason: rejectionReason,
             is_public: approved === true ? !!bot.is_public : false,
             moderated_at: new Date().toISOString()
           })
@@ -275,12 +281,11 @@ router.post('/', requireAuth, async (req, res) => {
     }
 
     const moderation = await moderateBotContent({
-      name,
+      name: `${name || ''} ${roblox_username || ''}`.trim(),
       description,
       systemPrompt: system_prompt
     });
-    const approved = moderation.approved === true ? true : (moderation.rejected === true ? false : null);
-    const rejected = moderation.rejected === true ? true : (moderation.approved === true ? false : null);
+    const { approved, rejected, rejectionReason } = normalizeModerationDecision(moderation);
 
     // Create the bot
     const { data: bot, error } = await supabase
@@ -297,7 +302,7 @@ router.post('/', requireAuth, async (req, res) => {
         is_public: approved === true ? !!is_public : false,
         approved,
         rejected,
-        rejection_reason: moderation.rejectionReason || null,
+        rejection_reason: rejectionReason,
         moderated_at: new Date().toISOString()
       })
       .select()
@@ -315,13 +320,13 @@ router.post('/', requireAuth, async (req, res) => {
 router.patch('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, system_prompt, is_public } = req.body;
+    const { name, description, system_prompt, roblox_username, is_public } = req.body;
     const supabase = req.app.locals.supabase;
 
     // Check ownership
     const { data: existing } = await supabase
       .from('bots')
-      .select('creator_id, approved, rejected')
+      .select('id, creator_id, name, roblox_username, description, system_prompt, approved, rejected, is_public')
       .eq('id', id)
       .single();
 
@@ -339,7 +344,37 @@ router.patch('/:id', requireAuth, async (req, res) => {
     if (typeof name === 'string') updatePayload.name = name;
     if (typeof description === 'string') updatePayload.description = description;
     if (typeof system_prompt === 'string') updatePayload.system_prompt = system_prompt;
+    if (typeof roblox_username === 'string') updatePayload.roblox_username = roblox_username;
     if (typeof is_public === 'boolean') updatePayload.is_public = is_public;
+
+    const shouldRemoderate =
+      typeof name === 'string' ||
+      typeof description === 'string' ||
+      typeof system_prompt === 'string' ||
+      typeof roblox_username === 'string';
+
+    if (shouldRemoderate) {
+      const mergedName = `${typeof name === 'string' ? name : (existing.name || '')} ${typeof roblox_username === 'string' ? roblox_username : (existing.roblox_username || '')}`.trim();
+      const mergedDescription = typeof description === 'string' ? description : existing.description;
+      const mergedPrompt = typeof system_prompt === 'string' ? system_prompt : existing.system_prompt;
+
+      const moderation = await moderateBotContent({
+        name: mergedName,
+        description: mergedDescription,
+        systemPrompt: mergedPrompt
+      });
+      const { approved, rejected, rejectionReason } = normalizeModerationDecision(moderation);
+
+      updatePayload.approved = approved;
+      updatePayload.rejected = rejected;
+      updatePayload.rejection_reason = rejectionReason;
+      updatePayload.moderated_at = new Date().toISOString();
+
+      // Never allow public unless currently approved.
+      if (approved !== true) {
+        updatePayload.is_public = false;
+      }
+    }
 
     const { data: bot, error } = await supabase
       .from('bots')
