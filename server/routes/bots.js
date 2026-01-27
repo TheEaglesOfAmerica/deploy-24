@@ -34,6 +34,45 @@ function moderateBotContent({ name, description, systemPrompt }) {
   };
 }
 
+function buildModerationStatus(bot) {
+  if (bot.approved === true) {
+    return {
+      status: 'approved',
+      message: 'Approved',
+      is_stuck: false,
+      pending_age_minutes: null
+    };
+  }
+
+  if (bot.rejected === true) {
+    return {
+      status: 'rejected',
+      message: bot.rejection_reason ? `Rejected — ${bot.rejection_reason}` : 'Rejected',
+      is_stuck: false,
+      pending_age_minutes: null
+    };
+  }
+
+  const createdAtMs = bot.created_at ? new Date(bot.created_at).getTime() : null;
+  const ageMinutes = createdAtMs ? Math.max(0, Math.floor((Date.now() - createdAtMs) / 60000)) : null;
+  const stuckThresholdMinutes = 30;
+  const isStuck = ageMinutes !== null && ageMinutes >= stuckThresholdMinutes;
+
+  let message = 'Pending — queued';
+  if (ageMinutes !== null) {
+    message = isStuck
+      ? `Pending — stuck (${ageMinutes}m). Try editing description or contact support.`
+      : `Pending — queued (${ageMinutes}m ago)`;
+  }
+
+  return {
+    status: 'pending',
+    message,
+    is_stuck: isStuck,
+    pending_age_minutes: ageMinutes
+  };
+}
+
 // Generate a unique 4-character code
 function generateShareCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed I,O,0,1 to avoid confusion
@@ -88,7 +127,14 @@ router.get('/:id', optionalAuth, async (req, res) => {
       delete bot.system_prompt;
     }
 
-    res.json(bot);
+    const moderationStatus = buildModerationStatus(bot);
+    res.json({
+      ...bot,
+      moderation_status: moderationStatus.status,
+      moderation_message: moderationStatus.message,
+      moderation_is_stuck: moderationStatus.is_stuck,
+      moderation_age_minutes: moderationStatus.pending_age_minutes
+    });
   } catch (err) {
     console.error('Get bot error:', err);
     res.status(500).json({ error: 'Failed to get bot' });
@@ -140,7 +186,18 @@ router.get('/', requireAuth, async (req, res) => {
       botsData = refreshed || botsData;
     }
 
-    res.json(botsData);
+    const enriched = (botsData || []).map(bot => {
+      const moderationStatus = buildModerationStatus(bot);
+      return {
+        ...bot,
+        moderation_status: moderationStatus.status,
+        moderation_message: moderationStatus.message,
+        moderation_is_stuck: moderationStatus.is_stuck,
+        moderation_age_minutes: moderationStatus.pending_age_minutes
+      };
+    });
+
+    res.json(enriched);
   } catch (err) {
     console.error('Get user bots error:', err);
     res.status(500).json({ error: 'Failed to get bots' });
