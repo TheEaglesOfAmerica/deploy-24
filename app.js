@@ -80,7 +80,6 @@ async function initSupabase() {
   try {
     if (typeof CONFIG === 'undefined' || !CONFIG.SUPABASE_URL) {
       console.log('📦 No Supabase config found, using local mode');
-      loginScreen?.classList.add('hidden');
       return false;
     }
 
@@ -107,7 +106,6 @@ async function initSupabase() {
     return true;
   } catch (err) {
     console.error('Supabase init failed:', err);
-    loginScreen?.classList.add('hidden');
     return false;
   }
 }
@@ -130,12 +128,10 @@ async function handleAuthSuccess(user) {
   currentUser = user;
   useSupabase = true;
 
+  // Hide login screen immediately for smooth UX
   hideLoginScreen();
 
-  // Load chats from Supabase
-  await loadChatsFromSupabase();
-
-  // Setup user menu in sidebar
+  // Setup user menu immediately
   setupUserMenu();
 
   // Show moderate tab if user is admin
@@ -143,6 +139,12 @@ async function handleAuthSuccess(user) {
   if (moderateTab && user?.user_metadata?.is_admin) {
     moderateTab.style.display = 'flex';
   }
+
+  // Load chats in background without blocking UI
+  loadChatsFromSupabase().catch(err => {
+    console.error('Failed to load chats:', err);
+    showToast('Failed to load chats');
+  });
 }
 
 function handleSignOut() {
@@ -199,6 +201,16 @@ function setupUserMenu() {
 }
 
 async function loadChatsFromSupabase() {
+  // Show loading state in chat list
+  if (chatList) {
+    chatList.innerHTML = `
+      <div class="empty-state">
+        <div class="spinner" style="margin: 0 auto 16px;"></div>
+        <div class="empty-state-text">Loading your chats...</div>
+      </div>
+    `;
+  }
+
   try {
     const chats = await window.essx.getChats();
 
@@ -294,6 +306,29 @@ function closeModal(modal) {
   if (modal) {
     modal.classList.remove('visible');
   }
+}
+
+function showToast(message, duration = 3000) {
+  // Remove existing toast if any
+  const existingToast = document.querySelector('.toast-notification');
+  if (existingToast) {
+    existingToast.remove();
+  }
+
+  // Create toast
+  const toast = document.createElement('div');
+  toast.className = 'toast-notification';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  // Show toast
+  setTimeout(() => toast.classList.add('show'), 10);
+
+  // Hide and remove toast
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
 }
 
 // ============================================================
@@ -1093,6 +1128,198 @@ function setupModals() {
     }
   });
 
+  // Device detection - show phone auth only on mobile, Apple auth only on Safari
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+  const phoneLoginBtn = document.getElementById('phoneLoginBtn');
+  const appleLoginBtn = document.getElementById('appleLoginBtn');
+
+  if (isMobile && phoneLoginBtn) {
+    phoneLoginBtn.style.display = 'flex';
+  }
+
+  if (isSafari && appleLoginBtn) {
+    appleLoginBtn.style.display = 'flex';
+  }
+
+  // Phone auth
+  const phoneAuthModal = document.getElementById('phoneAuthModal');
+  const closePhoneAuth = document.getElementById('closePhoneAuth');
+  const sendSMSBtn = document.getElementById('sendSMSBtn');
+  const verifySMSBtn = document.getElementById('verifySMSBtn');
+  const resendSMSBtn = document.getElementById('resendSMSBtn');
+  const phoneNumber = document.getElementById('phoneNumber');
+  const smsCode = document.getElementById('smsCode');
+
+  phoneLoginBtn?.addEventListener('click', () => {
+    openModal(phoneAuthModal);
+  });
+
+  closePhoneAuth?.addEventListener('click', () => {
+    closeModal(phoneAuthModal);
+  });
+
+  phoneAuthModal?.addEventListener('click', (e) => {
+    if (e.target === phoneAuthModal) closeModal(phoneAuthModal);
+  });
+
+  sendSMSBtn?.addEventListener('click', async () => {
+    const phone = phoneNumber?.value.trim();
+    if (!phone) {
+      alert('Please enter your phone number');
+      return;
+    }
+
+    setButtonLoading(sendSMSBtn, true);
+    try {
+      const { error } = await window.essx.supabase.auth.signInWithOtp({
+        phone: phone
+      });
+
+      if (error) throw error;
+
+      // Show step 2
+      document.getElementById('phoneStep1').style.display = 'none';
+      document.getElementById('phoneStep2').style.display = 'block';
+      showToast('Code sent to your phone');
+    } catch (err) {
+      console.error('Failed to send SMS:', err);
+      alert('Failed to send code: ' + err.message);
+    } finally {
+      setButtonLoading(sendSMSBtn, false);
+    }
+  });
+
+  verifySMSBtn?.addEventListener('click', async () => {
+    const phone = phoneNumber?.value.trim();
+    const code = smsCode?.value.trim();
+
+    if (!code || code.length !== 6) {
+      alert('Please enter the 6-digit code');
+      return;
+    }
+
+    setButtonLoading(verifySMSBtn, true);
+    try {
+      const { error } = await window.essx.supabase.auth.verifyOtp({
+        phone: phone,
+        token: code,
+        type: 'sms'
+      });
+
+      if (error) throw error;
+
+      closeModal(phoneAuthModal);
+      showToast('Signed in successfully!');
+    } catch (err) {
+      console.error('Failed to verify SMS:', err);
+      alert('Invalid code. Please try again.');
+    } finally {
+      setButtonLoading(verifySMSBtn, false);
+    }
+  });
+
+  resendSMSBtn?.addEventListener('click', async () => {
+    const phone = phoneNumber?.value.trim();
+    setButtonLoading(resendSMSBtn, true);
+    try {
+      const { error } = await window.essx.supabase.auth.signInWithOtp({
+        phone: phone
+      });
+      if (error) throw error;
+      showToast('Code resent!');
+    } catch (err) {
+      console.error('Failed to resend SMS:', err);
+      alert('Failed to resend code');
+    } finally {
+      setButtonLoading(resendSMSBtn, false);
+    }
+  });
+
+  // Apple Sign In
+  appleLoginBtn?.addEventListener('click', async () => {
+    setButtonLoading(appleLoginBtn, true);
+    try {
+      const { error } = await window.essx.supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+    } catch (err) {
+      console.error('Apple sign in failed:', err);
+      showLoginError('Failed to sign in with Apple. Please try again.');
+      setButtonLoading(appleLoginBtn, false);
+    }
+  });
+
+  // Authenticator Login
+  const authenticatorLoginBtn = document.getElementById('authenticatorLoginBtn');
+  const authenticatorLoginModal = document.getElementById('authenticatorLoginModal');
+  const closeAuthenticatorLogin = document.getElementById('closeAuthenticatorLogin');
+  const verifyAuthenticatorBtn = document.getElementById('verifyAuthenticatorBtn');
+  const authenticatorCode = document.getElementById('authenticatorCode');
+
+  authenticatorLoginBtn?.addEventListener('click', () => {
+    openModal(authenticatorLoginModal);
+    setTimeout(() => authenticatorCode?.focus(), 300);
+  });
+
+  closeAuthenticatorLogin?.addEventListener('click', () => {
+    closeModal(authenticatorLoginModal);
+  });
+
+  authenticatorLoginModal?.addEventListener('click', (e) => {
+    if (e.target === authenticatorLoginModal) closeModal(authenticatorLoginModal);
+  });
+
+  verifyAuthenticatorBtn?.addEventListener('click', async () => {
+    const code = authenticatorCode?.value.trim();
+
+    if (!code || code.length !== 6) {
+      alert('Please enter the 6-digit code');
+      return;
+    }
+
+    setButtonLoading(verifyAuthenticatorBtn, true);
+    try {
+      // Verify TOTP code for login
+      const result = await window.essx.api('/auth/totp/verify', {
+        method: 'POST',
+        body: JSON.stringify({ code })
+      });
+
+      if (result.success) {
+        closeModal(authenticatorLoginModal);
+        showToast('Signed in successfully!');
+        // Refresh auth state
+        const { data } = await window.essx.supabase.auth.getSession();
+        if (data.session) {
+          window.essx.session = data.session;
+          window.essx.user = data.session.user;
+        }
+      } else {
+        throw new Error('Invalid code');
+      }
+    } catch (err) {
+      console.error('Authenticator login failed:', err);
+      alert('Invalid code. Please try again.');
+    } finally {
+      setButtonLoading(verifyAuthenticatorBtn, false);
+    }
+  });
+
+  // Allow Enter key to submit codes
+  smsCode?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') verifySMSBtn?.click();
+  });
+
+  authenticatorCode?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') verifyAuthenticatorBtn?.click();
+  });
+
   totpSignupBtn?.addEventListener('click', async () => {
     await startTotpSignup();
   });
@@ -1184,6 +1411,81 @@ function setupModals() {
   const closeEditProfile = document.getElementById('closeEditProfile');
   const cancelEditProfile = document.getElementById('cancelEditProfile');
   const saveProfile = document.getElementById('saveProfile');
+  const uploadAvatarBtn = document.getElementById('uploadAvatarBtn');
+  const editAvatarFile = document.getElementById('editAvatarFile');
+  const editAvatarPreview = document.getElementById('editAvatarPreview');
+  const removeAvatarBtn = document.getElementById('removeAvatarBtn');
+
+  let selectedAvatarFile = null;
+  let currentAvatarUrl = null;
+
+  // Update avatar preview
+  function updateAvatarPreview(url) {
+    if (url) {
+      editAvatarPreview.innerHTML = `<img src="${url}" alt="Avatar" onerror="this.style.display='none'">`;
+      removeAvatarBtn.style.display = 'block';
+    } else {
+      editAvatarPreview.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+      `;
+      removeAvatarBtn.style.display = 'none';
+    }
+  }
+
+  // Upload button triggers file input
+  uploadAvatarBtn?.addEventListener('click', () => {
+    editAvatarFile?.click();
+  });
+
+  // Handle file selection
+  editAvatarFile?.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size must be less than 5MB');
+        return;
+      }
+
+      selectedAvatarFile = file;
+
+      // Preview the image
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        updateAvatarPreview(event.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  // Remove avatar
+  removeAvatarBtn?.addEventListener('click', () => {
+    selectedAvatarFile = null;
+    currentAvatarUrl = null;
+    updateAvatarPreview(null);
+    const editAvatarUrl = document.getElementById('editAvatarUrl');
+    if (editAvatarUrl) editAvatarUrl.value = '';
+  });
+
+  // Monitor URL input changes
+  const editAvatarUrl = document.getElementById('editAvatarUrl');
+  editAvatarUrl?.addEventListener('input', (e) => {
+    const url = e.target.value.trim();
+    if (url && url.startsWith('http')) {
+      updateAvatarPreview(url);
+      currentAvatarUrl = url;
+      selectedAvatarFile = null;
+    }
+  });
 
   profileEditBtn?.addEventListener('click', () => {
     if (!currentUser) return;
@@ -1202,16 +1504,22 @@ function setupModals() {
             '';
         }
 
+        const avatarUrl = profile?.avatar_url || currentUser.user_metadata?.avatar_url || '';
         if (editAvatarUrl) {
-          editAvatarUrl.value =
-            profile?.avatar_url ||
-            currentUser.user_metadata?.avatar_url ||
-            '';
+          editAvatarUrl.value = avatarUrl;
         }
+
+        currentAvatarUrl = avatarUrl;
+        selectedAvatarFile = null;
+        updateAvatarPreview(avatarUrl);
       } catch (err) {
         console.log('Profile fetch fallback:', err.message);
         if (editDisplayName) editDisplayName.value = currentUser.user_metadata?.full_name || '';
-        if (editAvatarUrl) editAvatarUrl.value = currentUser.user_metadata?.avatar_url || '';
+
+        const avatarUrl = currentUser.user_metadata?.avatar_url || '';
+        if (editAvatarUrl) editAvatarUrl.value = avatarUrl;
+        currentAvatarUrl = avatarUrl;
+        updateAvatarPreview(avatarUrl);
       }
 
       openModal(editProfileModal);
@@ -1229,11 +1537,39 @@ function setupModals() {
   saveProfile?.addEventListener('click', async () => {
     const editDisplayName = document.getElementById('editDisplayName');
     const editAvatarUrl = document.getElementById('editAvatarUrl');
+    const saveProfileText = document.getElementById('saveProfileText');
+    const saveProfileLoading = document.getElementById('saveProfileLoading');
 
     const displayName = editDisplayName?.value.trim();
-    const avatarUrl = editAvatarUrl?.value.trim();
+    let avatarUrl = editAvatarUrl?.value.trim();
+
+    // Show loading state
+    saveProfileText.style.display = 'none';
+    saveProfileLoading.style.display = 'inline';
+    saveProfile.disabled = true;
 
     try {
+      // Upload file if selected
+      if (selectedAvatarFile) {
+        const fileName = `avatar-${currentUser.id}-${Date.now()}.${selectedAvatarFile.name.split('.').pop()}`;
+
+        const { data, error } = await window.essx.supabase.storage
+          .from('avatars')
+          .upload(fileName, selectedAvatarFile, {
+            cacheControl: '3600',
+            upsert: true
+          });
+
+        if (error) throw error;
+
+        // Get public URL
+        const { data: urlData } = window.essx.supabase.storage
+          .from('avatars')
+          .getPublicUrl(fileName);
+
+        avatarUrl = urlData.publicUrl;
+      }
+
       await window.essx.updateProfile({
         display_name: displayName || null,
         avatar_url: avatarUrl || null
@@ -1267,10 +1603,15 @@ function setupModals() {
       await loadProfile();
 
       closeModal(editProfileModal);
-      alert('Profile updated successfully!');
+      showToast('Profile updated successfully!');
     } catch (err) {
       console.error('Failed to update profile:', err);
       alert('Failed to update profile: ' + err.message);
+    } finally {
+      // Reset loading state
+      saveProfileText.style.display = 'inline';
+      saveProfileLoading.style.display = 'none';
+      saveProfile.disabled = false;
     }
   });
 
@@ -2275,6 +2616,28 @@ function formatTime(ts) {
 function switchChat(id) {
   if (!state.chats[id]) return;
   state.currentChatId = id;
+
+  // Mark all received messages as read
+  const chat = state.chats[id];
+  if (chat && chat.messages) {
+    const now = Date.now();
+    let hasUnread = false;
+
+    chat.messages.forEach(msg => {
+      if (msg.type === 'received' && !msg.readAt) {
+        msg.readAt = now;
+        hasUnread = true;
+      }
+    });
+
+    // Update chat in database if there were unread messages
+    if (hasUnread && useSupabase) {
+      window.essx.updateChat(id, { messages: chat.messages }).catch(err => {
+        console.error('Failed to mark messages as read:', err);
+      });
+    }
+  }
+
   if (!useSupabase) saveState();
   renderChatList();
   renderMessages();

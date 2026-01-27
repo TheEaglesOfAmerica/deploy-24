@@ -443,6 +443,16 @@ body.theme-transitioning .app-container {
   to { transform: rotate(360deg); }
 }
 
+/* Generic spinner for loading states */
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--separator);
+  border-top-color: var(--imessage-blue);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
 .login-btn.google-btn {
   background: #fff;
   color: #333;
@@ -5998,6 +6008,92 @@ body.theme-custom.anim-gradient .gradient-bg {
   border-top-color: #fff;
 }
 
+/* Apple Sign In Button */
+.apple-btn {
+  background: #000 !important;
+  color: #fff !important;
+}
+
+.apple-btn:hover:not(:disabled) {
+  background: #1a1a1a !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.apple-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Phone Auth Button */
+.phone-btn {
+  background: #34C759 !important;
+  color: #fff !important;
+}
+
+.phone-btn:hover:not(:disabled) {
+  background: #30D158 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(52, 199, 89, 0.3);
+}
+
+.phone-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(52, 199, 89, 0.2);
+}
+
+/* Authenticator Button */
+.authenticator-btn {
+  background: #FF9500 !important;
+  color: #fff !important;
+}
+
+.authenticator-btn:hover:not(:disabled) {
+  background: #FF8C00 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 149, 0, 0.3);
+}
+
+.authenticator-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(255, 149, 0, 0.2);
+}
+
+/* Login Divider */
+.login-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 16px 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--separator);
+}
+
+.login-divider span {
+  padding: 0 12px;
+}
+
+/* Phone Auth Modal */
+.phone-auth-modal {
+  max-width: 400px;
+}
+
+.phone-step {
+  animation: fadeIn 0.3s ease;
+}
+
+/* Authenticator Login Modal */
+.authenticator-login-modal {
+  max-width: 400px;
+}
+
 /* Sidebar Tabs Navigation */
 .sidebar-tabs {
   display: flex;
@@ -7077,6 +7173,116 @@ body.theme-dark .mod-bot-card:hover {
 .modal-btn.secondary:hover {
   background: #e0e0e0;
   transform: translateY(-1px);
+}
+
+/* Edit Profile Modal Enhancements */
+.edit-profile-dialog {
+  max-width: 480px;
+}
+
+.edit-profile-avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--separator);
+  margin-bottom: 24px;
+}
+
+.edit-profile-avatar-preview {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--imessage-blue) 0%, #5856D6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 8px 24px rgba(0, 122, 255, 0.3);
+}
+
+.edit-profile-avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.edit-profile-avatar-preview svg {
+  width: 48px;
+  height: 48px;
+  color: #fff;
+  opacity: 0.7;
+}
+
+.edit-profile-avatar-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.avatar-upload-btn,
+.avatar-remove-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.avatar-upload-btn {
+  background: var(--imessage-blue);
+  color: #fff;
+}
+
+.avatar-upload-btn:hover {
+  background: #0051d5;
+  transform: translateY(-1px);
+}
+
+.avatar-upload-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.avatar-remove-btn {
+  background: var(--imessage-gray);
+  color: var(--text-primary);
+}
+
+.avatar-remove-btn:hover {
+  background: #FF3B30;
+  color: #fff;
+}
+
+/* Toast Notification */
+.toast-notification {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100px);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 100000;
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.toast-notification.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 @keyframes fadeIn {
