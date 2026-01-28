@@ -3,6 +3,65 @@ const router = express.Router();
 const { authenticator } = require('otplib');
 const QRCode = require('qrcode');
 const { requireAuth } = require('../middleware/auth');
+const {
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse
+} = require('@simplewebauthn/server');
+
+function toBase64Url(buffer) {
+  return Buffer.from(buffer).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function fromBase64Url(base64url) {
+  const base64 = String(base64url || '').replace(/-/g, '+').replace(/_/g, '/');
+  const pad = base64.length % 4 === 0 ? '' : '='.repeat(4 - (base64.length % 4));
+  return Buffer.from(base64 + pad, 'base64');
+}
+
+function getPasskeyConfig() {
+  const frontendUrl = process.env.FRONTEND_URL || process.env.PUBLIC_URL || process.env.APP_URL || '';
+  let origin = '';
+  let rpID = '';
+  try {
+    const u = new URL(frontendUrl);
+    origin = u.origin;
+    rpID = u.hostname;
+  } catch (e) {
+    // Fallback to request host/origin in route handlers if env isn't present.
+  }
+
+  return {
+    rpName: process.env.PASSKEY_RP_NAME || 'Spunnie',
+    rpID: process.env.PASSKEY_RP_ID || rpID,
+    origin: process.env.PASSKEY_ORIGIN || origin
+  };
+}
+
+// In-memory challenge store (good enough for a single PM2 instance).
+// Key: `${type}:${userId}` for registration, `${type}:${challenge}` for authentication.
+const passkeyChallenges = new Map();
+
+function setChallenge(key, challenge) {
+  passkeyChallenges.set(key, { challenge, createdAt: Date.now() });
+  setTimeout(() => {
+    const item = passkeyChallenges.get(key);
+    if (item && Date.now() - item.createdAt >= 10 * 60 * 1000) {
+      passkeyChallenges.delete(key);
+    }
+  }, 10 * 60 * 1000 + 1000).unref?.();
+}
+
+function getChallenge(key) {
+  const item = passkeyChallenges.get(key);
+  if (!item) return null;
+  if (Date.now() - item.createdAt > 10 * 60 * 1000) {
+    passkeyChallenges.delete(key);
+    return null;
+  }
+  return item.challenge;
+}
 
 // Google OAuth is handled client-side with Supabase
 // These endpoints handle TOTP setup and verification
@@ -214,6 +273,218 @@ router.post('/totp/login', async (req, res) => {
   } catch (err) {
     console.error('TOTP login error:', err);
     res.status(500).json({ error: 'Failed to login with TOTP' });
+  }
+});
+
+// ============================================================
+// PASSKEYS (WebAuthn)
+// ============================================================
+
+// Register: return options (requires logged-in user)
+router.post('/passkey/register-options', requireAuth, async (req, res) => {
+  try {
+    const supabase = req.app.locals.supabase;
+    const userId = req.user.id;
+
+    const cfg = getPasskeyConfig();
+    const rpID = cfg.rpID || req.get('host');
+    const origin = cfg.origin || `${req.protocol}://${req.get('host')}`;
+
+    const { data: existingCreds } = await supabase
+      .from('passkeys')
+      .select('credential_id')
+      .eq('user_id', userId);
+
+    const excludeCredentials = (existingCreds || [])
+      .filter(r => r.credential_id)
+      .map(r => ({
+        id: fromBase64Url(r.credential_id),
+        type: 'public-key'
+      }));
+
+    const options = await generateRegistrationOptions({
+      rpName: cfg.rpName,
+      rpID,
+      userID: toBase64Url(Buffer.from(userId, 'utf8')),
+      userName: req.user.email || userId,
+      userDisplayName: req.user.user_metadata?.full_name || req.user.email || userId,
+      attestationType: 'none',
+      authenticatorSelection: {
+        userVerification: 'preferred',
+        residentKey: 'preferred'
+      },
+      excludeCredentials
+    });
+
+    setChallenge(`reg:${userId}`, options.challenge);
+
+    res.json({
+      ...options,
+      rp: { name: cfg.rpName, id: rpID },
+      user: {
+        id: options.user.id,
+        name: req.user.email || userId,
+        displayName: req.user.user_metadata?.full_name || req.user.email || userId
+      },
+      expectedOrigin: origin
+    });
+  } catch (err) {
+    console.error('Passkey register-options error:', err);
+    res.status(500).json({ error: 'Failed to create passkey options' });
+  }
+});
+
+// Register: verify response + store credential (requires logged-in user)
+router.post('/passkey/register', requireAuth, async (req, res) => {
+  try {
+    const supabase = req.app.locals.supabase;
+    const userId = req.user.id;
+
+    const cfg = getPasskeyConfig();
+    const rpID = cfg.rpID || req.get('host');
+    const expectedOrigin = cfg.origin || `${req.protocol}://${req.get('host')}`;
+    const expectedChallenge = getChallenge(`reg:${userId}`);
+
+    if (!expectedChallenge) {
+      return res.status(400).json({ error: 'Registration expired. Try again.' });
+    }
+
+    const verification = await verifyRegistrationResponse({
+      response: req.body,
+      expectedChallenge,
+      expectedOrigin,
+      expectedRPID: rpID
+    });
+
+    if (!verification.verified || !verification.registrationInfo) {
+      return res.status(401).json({ success: false, error: 'Passkey registration failed' });
+    }
+
+    const { credentialID, credentialPublicKey, counter } = verification.registrationInfo;
+    const credentialIdB64 = toBase64Url(credentialID);
+    const publicKeyB64 = toBase64Url(credentialPublicKey);
+
+    const { error } = await supabase
+      .from('passkeys')
+      .insert({
+        user_id: userId,
+        user_email: req.user.email,
+        credential_id: credentialIdB64,
+        public_key: publicKeyB64,
+        counter: counter || 0,
+        transports: Array.isArray(req.body?.transports) ? req.body.transports : null
+      });
+
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Passkey register error:', err);
+    res.status(500).json({ error: 'Failed to register passkey' });
+  }
+});
+
+// Login: issue challenge (no auth required)
+router.post('/passkey/challenge', async (req, res) => {
+  try {
+    const cfg = getPasskeyConfig();
+    const rpID = cfg.rpID || req.get('host');
+
+    const options = await generateAuthenticationOptions({
+      rpID,
+      userVerification: 'preferred'
+      // allowCredentials omitted to allow "discoverable credentials" UX
+    });
+
+    setChallenge(`auth:${options.challenge}`, options.challenge);
+
+    res.json({ challenge: options.challenge, rpId: rpID });
+  } catch (err) {
+    console.error('Passkey challenge error:', err);
+    res.status(500).json({ error: 'Failed to create passkey challenge' });
+  }
+});
+
+// Login: verify + return a Supabase magic link to finish sign-in
+router.post('/passkey/verify', async (req, res) => {
+  try {
+    const supabase = req.app.locals.supabase;
+    const cfg = getPasskeyConfig();
+    const rpID = cfg.rpID || req.get('host');
+    const expectedOrigin = cfg.origin || `${req.protocol}://${req.get('host')}`;
+
+    const rawId = req.body?.rawId;
+    const credId = req.body?.id || rawId;
+    if (!credId) return res.status(400).json({ error: 'Missing credential id' });
+
+    // Client doesn't explicitly send the issued challenge back; parse it from clientDataJSON.
+    let challengeFromClient = null;
+    try {
+      const clientData = JSON.parse(fromBase64Url(req.body?.response?.clientDataJSON || '').toString('utf8'));
+      challengeFromClient = clientData?.challenge || null;
+    } catch (e) {}
+
+    const expectedChallenge = challengeFromClient ? getChallenge(`auth:${challengeFromClient}`) : null;
+    if (!expectedChallenge) {
+      return res.status(400).json({ error: 'Challenge expired. Try again.' });
+    }
+
+    const { data: passkey, error: passkeyError } = await supabase
+      .from('passkeys')
+      .select('id, user_id, user_email, credential_id, public_key, counter')
+      .eq('credential_id', credId)
+      .single();
+
+    if (passkeyError || !passkey) {
+      return res.status(404).json({ error: 'Passkey not found' });
+    }
+
+    const verification = await verifyAuthenticationResponse({
+      response: req.body,
+      expectedChallenge,
+      expectedOrigin,
+      expectedRPID: rpID,
+      authenticator: {
+        credentialID: fromBase64Url(passkey.credential_id),
+        credentialPublicKey: fromBase64Url(passkey.public_key),
+        counter: passkey.counter || 0
+      }
+    });
+
+    if (!verification.verified) {
+      return res.status(401).json({ success: false, error: 'Passkey verification failed' });
+    }
+
+    const newCounter = verification.authenticationInfo?.newCounter;
+    if (typeof newCounter === 'number') {
+      await supabase
+        .from('passkeys')
+        .update({ counter: newCounter, updated_at: new Date().toISOString() })
+        .eq('id', passkey.id);
+    }
+
+    if (!passkey.user_email) {
+      return res.status(500).json({ error: 'Passkey missing email. Re-register while signed in.' });
+    }
+
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'magiclink',
+      email: passkey.user_email,
+      options: {
+        redirectTo: cfg.origin || `${req.protocol}://${req.get('host')}`
+      }
+    });
+
+    if (linkError) throw linkError;
+    const actionLink = linkData?.properties?.action_link || linkData?.properties?.actionLink || linkData?.action_link;
+    if (!actionLink) {
+      return res.status(500).json({ error: 'Failed to generate login link' });
+    }
+
+    res.json({ success: true, actionLink });
+  } catch (err) {
+    console.error('Passkey verify error:', err);
+    res.status(500).json({ error: 'Failed to verify passkey' });
   }
 });
 

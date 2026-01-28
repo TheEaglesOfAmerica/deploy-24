@@ -32,7 +32,7 @@ const messageContact = document.getElementById('messageContact');
 // New modal elements
 const loginScreen = document.getElementById('loginScreen');
 const googleLoginBtn = document.getElementById('googleLoginBtn');
-const totpSignupBtn = document.getElementById('totpSignupBtn');
+const totpSignupBtn = document.getElementById('setupAuthenticatorBtn') || document.getElementById('totpSignupBtn');
 const totpModal = document.getElementById('totpModal');
 const closeTotpModal = document.getElementById('closeTotpModal');
 const addBotModal = document.getElementById('addBotModal');
@@ -344,7 +344,7 @@ async function startTotpSignup() {
   try {
     // TOTP setup requires an authenticated Supabase user (server verifies via Bearer token)
     if (!window.essx?.isLoggedIn?.()) {
-      alert('Please sign in first (Google), then set up your authenticator.');
+      showToast('Please sign in first (Google), then set up your authenticator.', 'error');
       return;
     }
 
@@ -362,9 +362,12 @@ async function startTotpSignup() {
     totpSignupState.qrCode = qrCodeUrl;
 
     // Show step 1
-    document.getElementById('totpSetupStep').style.display = 'block';
-    document.getElementById('totpVerifyStep').style.display = 'none';
-    document.getElementById('totpStepIndicator').textContent = 'Step 1 of 2: Scan QR Code';
+    const setupStep = document.getElementById('totpSetupStep');
+    const verifyStep = document.getElementById('totpVerifyStep');
+    const indicator = document.getElementById('totpStepIndicator');
+    if (setupStep) setupStep.style.display = 'block';
+    if (verifyStep) verifyStep.style.display = 'none';
+    if (indicator) indicator.textContent = 'Step 1 of 2: Scan QR Code';
 
     // Display QR code and secret
     const qrImg = document.getElementById('qrCodeImage');
@@ -376,19 +379,22 @@ async function startTotpSignup() {
     openModal(totpModal);
   } catch (err) {
     console.error('TOTP signup start failed:', err);
-    alert('Failed to generate authenticator setup');
+    showToast('Failed to generate authenticator setup', 'error');
   }
 }
 
 function showTotpVerifyStep() {
   if (!totpSignupState.secret) {
-    alert('Please scan the QR code first');
+    showToast('Please scan the QR code first', 'error');
     return;
   }
 
-  document.getElementById('totpSetupStep').style.display = 'none';
-  document.getElementById('totpVerifyStep').style.display = 'block';
-  document.getElementById('totpStepIndicator').textContent = 'Step 2 of 2: Verify Code';
+  const setupStep = document.getElementById('totpSetupStep');
+  const verifyStep = document.getElementById('totpVerifyStep');
+  const indicator = document.getElementById('totpStepIndicator');
+  if (setupStep) setupStep.style.display = 'none';
+  if (verifyStep) verifyStep.style.display = 'block';
+  if (indicator) indicator.textContent = 'Step 2 of 2: Verify Code';
 
   // Clear and focus first digit
   document.querySelectorAll('.totp-digit').forEach(input => input.value = '');
@@ -400,13 +406,13 @@ async function completeTotpSignup() {
   const code = Array.from(digits).map(d => d.value).join('');
 
   if (code.length !== 6) {
-    alert('Please enter 6 digits');
+    showToast('Please enter 6 digits', 'error');
     return;
   }
 
   try {
     if (!window.essx?.isLoggedIn?.()) {
-      alert('Please sign in first (Google).');
+      showToast('Please sign in first (Google).', 'error');
       return;
     }
 
@@ -420,11 +426,11 @@ async function completeTotpSignup() {
 
     if (response.success) {
       closeModal(totpModal);
-      alert('Authenticator enabled successfully.');
+      showToast('Authenticator enabled successfully!', 'success');
     }
   } catch (err) {
     console.error('Verification failed:', err);
-    alert('Invalid code. Try again.');
+    showToast('Invalid code. Try again.', 'error');
   }
 }
 
@@ -498,17 +504,19 @@ async function signInWithPasskey() {
       })
     });
 
-    if (verifyResponse.success) {
-      // Refresh auth state
-      const { data } = await window.essx.supabase.auth.getSession();
-      if (data.session) {
-        window.essx.session = data.session;
-        window.essx.user = data.session.user;
-      }
-      return true;
-    } else {
+    if (!verifyResponse?.success) {
       throw new Error('Passkey verification failed');
     }
+
+    // The server returns a Supabase magic link to finish sign-in.
+    if (verifyResponse.actionLink) {
+      window.location.href = verifyResponse.actionLink;
+      return true;
+    }
+
+    // Fallback: if no link is returned, just reload and let Supabase session restore.
+    window.location.reload();
+    return true;
   } catch (err) {
     console.error('Passkey sign in error:', err);
     throw err;

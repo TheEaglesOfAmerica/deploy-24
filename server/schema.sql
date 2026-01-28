@@ -47,6 +47,19 @@ CREATE TABLE IF NOT EXISTS chats (
   UNIQUE(user_id, bot_id)
 );
 
+-- Passkeys (WebAuthn credentials)
+CREATE TABLE IF NOT EXISTS passkeys (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  user_email TEXT,
+  credential_id TEXT UNIQUE NOT NULL,
+  public_key TEXT NOT NULL,
+  counter BIGINT DEFAULT 0,
+  transports TEXT[],
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_bots_share_code ON bots(share_code);
 CREATE INDEX IF NOT EXISTS idx_bots_creator ON bots(creator_id);
@@ -55,6 +68,8 @@ CREATE INDEX IF NOT EXISTS idx_bots_pending ON bots(approved, rejected) WHERE ap
 CREATE INDEX IF NOT EXISTS idx_chats_user ON chats(user_id);
 CREATE INDEX IF NOT EXISTS idx_chats_bot ON chats(bot_id);
 CREATE INDEX IF NOT EXISTS idx_chats_updated ON chats(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_passkeys_user ON passkeys(user_id);
+CREATE INDEX IF NOT EXISTS idx_passkeys_credential ON passkeys(credential_id);
 
 -- Function to increment chat count
 CREATE OR REPLACE FUNCTION increment_chat_count(bot_id UUID)
@@ -90,6 +105,7 @@ CREATE TRIGGER on_auth_user_created
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE passkeys ENABLE ROW LEVEL SECURITY;
 
 -- Profiles: Users can read all, update own
 CREATE POLICY "Profiles are viewable by everyone" ON profiles FOR SELECT USING (true);
@@ -106,6 +122,11 @@ CREATE POLICY "Users can view own chats" ON chats FOR SELECT USING (auth.uid() =
 CREATE POLICY "Users can create own chats" ON chats FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own chats" ON chats FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own chats" ON chats FOR DELETE USING (auth.uid() = user_id);
+
+-- Passkeys: users can manage their own
+CREATE POLICY "Users can view own passkeys" ON passkeys FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create own passkeys" ON passkeys FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete own passkeys" ON passkeys FOR DELETE USING (auth.uid() = user_id);
 
 -- Insert the system Support bot
 INSERT INTO bots (id, creator_id, share_code, roblox_user_id, roblox_username, name, description, system_prompt, is_public, approved)

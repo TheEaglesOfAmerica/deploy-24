@@ -141,6 +141,50 @@
     </div>
   </div>
 
+  <!-- TOTP Setup Modal -->
+  <div class="modal-backdrop" id="totpModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Authenticator Setup</h2>
+        <button class="modal-close" id="closeTotpModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="step-indicator" id="totpStepIndicator">Step 1 of 2: Scan QR Code</div>
+
+        <!-- Step 1 -->
+        <div id="totpSetupStep">
+          <p style="margin-bottom: 14px; color: var(--text-secondary); font-size: 14px;">
+            Scan this QR code with Google Authenticator / Authy.
+          </p>
+          <div style="display:flex;justify-content:center;margin: 12px 0;">
+            <img id="qrCodeImage" alt="QR Code" style="width: 220px; height: 220px; border-radius: 16px; background: #fff; padding: 10px;">
+          </div>
+          <div style="text-align:center;margin-top:10px;">
+            <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 6px;">Or enter this secret</div>
+            <div id="secretCode" style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; color: var(--text-primary);"></div>
+          </div>
+          <button class="modal-btn primary" id="totpSetupNextBtn" style="margin-top: 16px;">Next</button>
+        </div>
+
+        <!-- Step 2 -->
+        <div id="totpVerifyStep" style="display:none;">
+          <p style="margin-bottom: 14px; color: var(--text-secondary); font-size: 14px;">
+            Enter the 6-digit code from your authenticator app.
+          </p>
+          <div class="totp-code-input">
+            <input class="totp-digit" inputmode="numeric" maxlength="1" autocomplete="one-time-code">
+            <input class="totp-digit" inputmode="numeric" maxlength="1">
+            <input class="totp-digit" inputmode="numeric" maxlength="1">
+            <input class="totp-digit" inputmode="numeric" maxlength="1">
+            <input class="totp-digit" inputmode="numeric" maxlength="1">
+            <input class="totp-digit" inputmode="numeric" maxlength="1">
+          </div>
+          <button class="modal-btn primary" id="verifyTotpBtn">Verify</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- App Container -->
   <div class="app-container">
     <!-- Sidebar -->
@@ -934,8 +978,8 @@
     </div>
   </template>
 
-  <script src="config.js?v=3"></script>
-  <script src="supabase.js?v=3"></script>
-  <script src="app.js?v=10"></script>
+  <script src="config.js?v=5"></script>
+  <script src="supabase.js?v=4"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>
