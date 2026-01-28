@@ -123,23 +123,25 @@
     </div>
   </div>
 
-  <!-- Authenticator Login Modal -->
-  <div class="modal-backdrop" id="authenticatorLoginModal">
-    <div class="modal-content authenticator-login-modal">
-      <div class="modal-header">
-        <h2>Authenticator Sign In</h2>
-        <button class="modal-close" id="closeAuthenticatorLogin">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p style="margin-bottom: 16px; color: var(--text-secondary); font-size: 14px;">
-          Enter the 6-digit code from your authenticator app
-        </p>
-        <label for="authenticatorCode">Verification Code</label>
-        <input type="text" id="authenticatorCode" class="modal-input" placeholder="123456" maxlength="6" autocomplete="one-time-code">
-        <button class="modal-btn primary" id="verifyAuthenticatorBtn" style="margin-top: 16px; width: 100%;">Sign In</button>
-      </div>
-    </div>
-  </div>
+	  <!-- Authenticator Login Modal -->
+	  <div class="modal-backdrop" id="authenticatorLoginModal">
+	    <div class="modal-content authenticator-login-modal">
+	      <div class="modal-header">
+	        <h2>Authenticator Sign In</h2>
+	        <button class="modal-close" id="closeAuthenticatorLogin">&times;</button>
+	      </div>
+	      <div class="modal-body">
+	        <p style="margin-bottom: 16px; color: var(--text-secondary); font-size: 14px;">
+	          Enter your email, then the 6-digit code from your authenticator app.
+	        </p>
+	        <label for="authenticatorEmail">Email</label>
+	        <input type="email" id="authenticatorEmail" class="modal-input" placeholder="you@example.com" autocomplete="email">
+	        <label for="authenticatorCode">Verification Code</label>
+	        <input type="text" id="authenticatorCode" class="modal-input" placeholder="123456" maxlength="6" autocomplete="one-time-code">
+	        <button class="modal-btn primary" id="verifyAuthenticatorBtn" style="margin-top: 16px; width: 100%;">Sign In</button>
+	      </div>
+	    </div>
+	  </div>
 
   <!-- TOTP Setup Modal -->
   <div class="modal-backdrop" id="totpModal">

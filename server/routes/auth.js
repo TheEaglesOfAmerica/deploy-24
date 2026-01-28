@@ -20,6 +20,14 @@ function fromBase64Url(base64url) {
   return Buffer.from(base64 + pad, 'base64');
 }
 
+function uuidToBytes(uuid) {
+  const cleaned = String(uuid || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+  if (cleaned.length === 32) {
+    return Buffer.from(cleaned, 'hex');
+  }
+  return Buffer.from(String(uuid || ''), 'utf8');
+}
+
 function getPasskeyConfig() {
   const frontendUrl = process.env.FRONTEND_URL || process.env.PUBLIC_URL || process.env.APP_URL || '';
   let origin = '';
@@ -232,6 +240,8 @@ router.post('/totp/login', async (req, res) => {
     }
 
     const supabase = req.app.locals.supabase;
+    const cfg = getPasskeyConfig();
+    const redirectTo = cfg.origin || process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
 
     // Get user by email
     const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
@@ -256,19 +266,26 @@ router.post('/totp/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid code' });
     }
 
-    // Generate a session for the user
-    const { data: session, error: signInError } = await supabase.auth.admin.generateLink({
+    // Generate a Supabase magic link so the client can complete sign-in
+    const { data: linkData, error: signInError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
-      email: user.email
+      email: user.email,
+      options: {
+        redirectTo
+      }
     });
 
     if (signInError) throw signInError;
 
+    const actionLink = linkData?.properties?.action_link || linkData?.properties?.actionLink || linkData?.action_link;
+    if (!actionLink) {
+      return res.status(500).json({ error: 'Failed to generate login link' });
+    }
+
     res.json({
       success: true,
       message: 'TOTP verified',
-      // Client will need to complete the sign-in
-      userId: user.id
+      actionLink
     });
   } catch (err) {
     console.error('TOTP login error:', err);
@@ -285,9 +302,10 @@ router.post('/passkey/register-options', requireAuth, async (req, res) => {
   try {
     const supabase = req.app.locals.supabase;
     const userId = req.user.id;
+    const userIdBytes = uuidToBytes(userId);
 
     const cfg = getPasskeyConfig();
-    const rpID = cfg.rpID || req.get('host');
+    const rpID = cfg.rpID || req.hostname || String(req.get('host') || '').split(':')[0];
     const origin = cfg.origin || `${req.protocol}://${req.get('host')}`;
 
     const { data: existingCreds } = await supabase
@@ -305,7 +323,7 @@ router.post('/passkey/register-options', requireAuth, async (req, res) => {
     const options = await generateRegistrationOptions({
       rpName: cfg.rpName,
       rpID,
-      userID: toBase64Url(Buffer.from(userId, 'utf8')),
+      userID: userIdBytes,
       userName: req.user.email || userId,
       userDisplayName: req.user.user_metadata?.full_name || req.user.email || userId,
       attestationType: 'none',
@@ -322,7 +340,7 @@ router.post('/passkey/register-options', requireAuth, async (req, res) => {
       ...options,
       rp: { name: cfg.rpName, id: rpID },
       user: {
-        id: options.user.id,
+        id: toBase64Url(userIdBytes),
         name: req.user.email || userId,
         displayName: req.user.user_metadata?.full_name || req.user.email || userId
       },
@@ -341,7 +359,7 @@ router.post('/passkey/register', requireAuth, async (req, res) => {
     const userId = req.user.id;
 
     const cfg = getPasskeyConfig();
-    const rpID = cfg.rpID || req.get('host');
+    const rpID = cfg.rpID || req.hostname || String(req.get('host') || '').split(':')[0];
     const expectedOrigin = cfg.origin || `${req.protocol}://${req.get('host')}`;
     const expectedChallenge = getChallenge(`reg:${userId}`);
 
@@ -388,7 +406,7 @@ router.post('/passkey/register', requireAuth, async (req, res) => {
 router.post('/passkey/challenge', async (req, res) => {
   try {
     const cfg = getPasskeyConfig();
-    const rpID = cfg.rpID || req.get('host');
+    const rpID = cfg.rpID || req.hostname || String(req.get('host') || '').split(':')[0];
 
     const options = await generateAuthenticationOptions({
       rpID,
@@ -410,7 +428,7 @@ router.post('/passkey/verify', async (req, res) => {
   try {
     const supabase = req.app.locals.supabase;
     const cfg = getPasskeyConfig();
-    const rpID = cfg.rpID || req.get('host');
+    const rpID = cfg.rpID || req.hostname || String(req.get('host') || '').split(':')[0];
     const expectedOrigin = cfg.origin || `${req.protocol}://${req.get('host')}`;
 
     const rawId = req.body?.rawId;

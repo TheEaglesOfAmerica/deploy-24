@@ -1428,11 +1428,12 @@ function setupModals() {
   const authenticatorLoginModal = document.getElementById('authenticatorLoginModal');
   const closeAuthenticatorLogin = document.getElementById('closeAuthenticatorLogin');
   const verifyAuthenticatorBtn = document.getElementById('verifyAuthenticatorBtn');
+  const authenticatorEmail = document.getElementById('authenticatorEmail');
   const authenticatorCode = document.getElementById('authenticatorCode');
 
   authenticatorLoginBtn?.addEventListener('click', () => {
     openModal(authenticatorLoginModal);
-    setTimeout(() => authenticatorCode?.focus(), 300);
+    setTimeout(() => (authenticatorEmail || authenticatorCode)?.focus(), 200);
   });
 
   closeAuthenticatorLogin?.addEventListener('click', () => {
@@ -1444,46 +1445,53 @@ function setupModals() {
   });
 
   verifyAuthenticatorBtn?.addEventListener('click', async () => {
-    const code = authenticatorCode?.value.trim();
+    const email = (authenticatorEmail?.value || '').trim();
+    const code = (authenticatorCode?.value || '').trim();
+
+    if (!email || !email.includes('@')) {
+      showToast('Enter your email address', 'error');
+      return;
+    }
 
     if (!code || code.length !== 6) {
-      showToast('Please enter the 6-digit code', 'error');
+      showToast('Enter the 6-digit code', 'error');
       return;
     }
 
     setButtonLoading(verifyAuthenticatorBtn, true);
     try {
-      // Verify TOTP code for login
-      const result = await window.essx.api('/auth/totp/verify', {
+      // Email + TOTP code login (server returns Supabase magic link)
+      const result = await window.essx.api('/auth/totp/login', {
         method: 'POST',
-        body: JSON.stringify({ code })
+        body: JSON.stringify({ email, code })
       });
 
-      if (result.success) {
-        saveLastAuthMethod('authenticator');
-        closeModal(authenticatorLoginModal);
-        showToast('Signed in successfully!');
-        // Refresh auth state
-        const { data } = await window.essx.supabase.auth.getSession();
-        if (data.session) {
-          window.essx.session = data.session;
-          window.essx.user = data.session.user;
-        }
-      } else {
-        throw new Error('Invalid code');
+      if (!result?.success) throw new Error(result?.error || 'Invalid email/code');
+
+      saveLastAuthMethod('authenticator');
+      closeModal(authenticatorLoginModal);
+
+      if (result.actionLink) {
+        window.location.href = result.actionLink;
+        return;
       }
+
+      showToast('Signed in. Refreshing…', 'success');
+      window.location.reload();
     } catch (err) {
       console.error('Authenticator login failed:', err);
-      alert('Invalid code. Please try again.');
+      showToast(err?.message || 'Invalid email/code. Try again.', 'error');
     } finally {
       setButtonLoading(verifyAuthenticatorBtn, false);
     }
   });
 
   // Allow Enter key to submit authenticator code
-  authenticatorCode?.addEventListener('keypress', (e) => {
+  const submitAuthenticatorOnEnter = (e) => {
     if (e.key === 'Enter') verifyAuthenticatorBtn?.click();
-  });
+  };
+  authenticatorEmail?.addEventListener('keypress', submitAuthenticatorOnEnter);
+  authenticatorCode?.addEventListener('keypress', submitAuthenticatorOnEnter);
 
   totpSignupBtn?.addEventListener('click', async () => {
     await startTotpSignup();

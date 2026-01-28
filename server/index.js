@@ -6,6 +6,9 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Behind nginx: trust X-Forwarded-* so req.protocol/hostname are correct
+app.set('trust proxy', 1);
+
 // Initialize Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
